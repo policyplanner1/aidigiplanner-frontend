@@ -1,6 +1,8 @@
-import { getOrganizationById } from "../services/auth/mockAuth";
+// Mock/demo-data workspace fallback (mockAuth.ts / projectService.ts) is disabled below —
+// the app now always resolves the workspace from the live API session.
+// import { getOrganizationById } from "../services/auth/mockAuth";
 import { mapOrganizationFromSession } from "../services/auth/mapSession";
-import { getProjectsForSession } from "../services/projects/projectService";
+// import { getProjectsForSession } from "../services/projects/projectService";
 import { useAuthStore } from "../store/authStore";
 import { useOrganizationStore } from "../store/organizationStore";
 
@@ -16,23 +18,21 @@ export function useWorkspace() {
 
   void revision;
 
-  const isApi = session?.source === "api";
-  const organization = isApi
-    ? mapOrganizationFromSession(session)
-    : getOrganizationById(session?.organizationId ?? null);
+  // const isApi = session?.source === "api";
+  const organization = session ? mapOrganizationFromSession(session) : null;
+  // : getOrganizationById(session?.organizationId ?? null);
 
-  const projects = isApi
-    ? liveProjects
-    : session
-      ? getProjectsForSession(session)
-      : [];
+  const projects = liveProjects;
+  // : session
+  //   ? getProjectsForSession(session)
+  //   : [];
 
   const currentProject =
     projects.find((project) => project.id === currentBrandId) ??
     projects[0] ??
     null;
 
-  const subProducts = isApi ? liveSubProducts : [];
+  const subProducts = liveSubProducts;
   const currentSubProduct =
     subProducts.find((item) => item.id === currentSubProductId) ?? null;
 

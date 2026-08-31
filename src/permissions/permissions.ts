@@ -1,46 +1,26 @@
 export const PERMISSIONS = {
-  BRANDS_VIEW: "brands.view",
-  BRANDS_MANAGE: "brands.manage",
+  COMPANY_VIEW: "company.view",
+  COMPANY_MANAGE: "company.manage",
 
-  SOCIAL_VIEW: "social.view",
-  SOCIAL_CONNECT: "social.connect",
-  SOCIAL_PUBLISH: "social.publish",
+  PRODUCT_VIEW: "product.view",
+  PRODUCT_CREATE: "product.create",
+  PRODUCT_EDIT: "product.edit",
+  PRODUCT_DELETE: "product.delete",
 
-  CONTENT_VIEW: "content.view",
+  SUBPRODUCT_MANAGE: "subproduct.manage",
+
+  TEAM_MANAGE: "team.manage",
+
   CONTENT_CREATE: "content.create",
   CONTENT_EDIT: "content.edit",
+  CONTENT_DELETE: "content.delete",
   CONTENT_APPROVE: "content.approve",
   CONTENT_PUBLISH: "content.publish",
 
-  CAMPAIGN_VIEW: "campaign.view",
+  SOCIAL_MANAGE: "social.manage",
   CAMPAIGN_MANAGE: "campaign.manage",
-
-  AGENTS_VIEW: "agents.view",
-  AGENTS_MANAGE: "agents.manage",
-
-  LEADS_VIEW: "leads.view",
-  LEADS_CREATE: "leads.create",
-  LEADS_MANAGE: "leads.manage",
-
-  CRM_VIEW: "crm.view",
-  CRM_MANAGE: "crm.manage",
-
   ANALYTICS_VIEW: "analytics.view",
-  ANALYTICS_EXPORT: "analytics.export",
-  CROSS_NETWORK_VIEW: "cross_network.view",
-
-  USERS_VIEW: "users.view",
-  USERS_MANAGE: "users.manage",
-
-  INTEGRATIONS_VIEW: "integrations.view",
-  BILLING_VIEW: "billing.view",
-  SETTINGS_VIEW: "settings.view",
-
-  PLATFORM_ORGANIZATIONS_VIEW: "platform.organizations.view",
-  PLATFORM_USERS_VIEW: "platform.users.view",
-  PLATFORM_BILLING_VIEW: "platform.billing.view",
-  PLATFORM_USAGE_VIEW: "platform.usage.view",
-  PLATFORM_SETTINGS_VIEW: "platform.settings.view",
+  BILLING_MANAGE: "billing.manage",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];

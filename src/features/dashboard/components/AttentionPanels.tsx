@@ -1,6 +1,8 @@
 import {
+  AutoAwesomeOutlined,
   CalendarMonthOutlined,
   ChatBubbleOutlined,
+  EmojiEventsOutlined,
   FactCheckOutlined,
   InboxOutlined,
   KeyboardArrowRight,
@@ -79,7 +81,7 @@ export function AttentionPanels({ attention, weekPosts, onOpen }: AttentionPanel
           uniquePosts.map((post) => {
             const tone = STATUS_TONE[post.status];
             return (
-              <Row key={post.id} onClick={() => onOpen("/app/social/calendar")}>
+              <Row key={post.id} onClick={() => onOpen("/app/calendar")}>
                 <PlatformMark platform={post.platform} size={28} />
                 <Box sx={{ minWidth: 0, flex: 1 }}>
                   <Typography sx={{ ...TYPE.section, fontWeight: 700 }} noWrap>
@@ -250,6 +252,73 @@ function Empty({ text }: { text: string }) {
     <Typography sx={{ ...TYPE.body, color: "text.secondary", py: 1.5, px: 0.5 }}>
       {text}
     </Typography>
+  );
+}
+
+export type TopPerformingItem = { id: string; label: string; detail: string };
+
+export function TopPerformingPanel({
+  items,
+  onOpen,
+}: {
+  items: TopPerformingItem[];
+  onOpen: (path: string) => void;
+}) {
+  const uniqueItems = uniqueBy(items, (item) => item.id);
+  return (
+    <Panel
+      title="Top-performing content"
+      subtitle="Your most recently published posts."
+      accent="#7C5CFC"
+      icon={<EmojiEventsOutlined sx={{ fontSize: 18 }} />}
+    >
+      {uniqueItems.length === 0 ? (
+        <Empty text="Nothing published yet." />
+      ) : (
+        uniqueItems.map((item) => (
+          <Row key={item.id} onClick={() => onOpen("/app/calendar")}>
+            <Glyph accent="#7C5CFC">
+              <EmojiEventsOutlined sx={{ fontSize: 18 }} />
+            </Glyph>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography sx={{ ...TYPE.section, fontWeight: 700 }} noWrap>
+                {item.label}
+              </Typography>
+              <Typography noWrap sx={{ fontFamily: FONT_FAMILY, fontSize: 12.5, color: "text.secondary", mt: 0.2 }}>
+                {item.detail}
+              </Typography>
+            </Box>
+            <ArrowChip accent="#7C5CFC" />
+          </Row>
+        ))
+      )}
+    </Panel>
+  );
+}
+
+export function AiRecommendationsPanel({ items }: { items: string[] }) {
+  return (
+    <Panel
+      title="AI recommendations"
+      subtitle="Suggested next steps for this product."
+      accent="#1F8A80"
+      icon={<AutoAwesomeOutlined sx={{ fontSize: 18 }} />}
+    >
+      {items.length === 0 ? (
+        <Empty text="You are all caught up." />
+      ) : (
+        items.map((text, index) => (
+          <Row key={`${index}_${text}`} onClick={() => undefined}>
+            <Glyph accent="#1F8A80">
+              <AutoAwesomeOutlined sx={{ fontSize: 18 }} />
+            </Glyph>
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+              <Typography sx={{ fontFamily: FONT_FAMILY, fontSize: 13, fontWeight: 600 }}>{text}</Typography>
+            </Box>
+          </Row>
+        ))
+      )}
+    </Panel>
   );
 }
 

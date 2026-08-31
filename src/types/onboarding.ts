@@ -23,6 +23,7 @@ export type ProductInviteRole = "creator" | "approver" | "publisher" | "analyst"
 export type ApiOnboardingStatus = {
   onboarding_step?: OnboardingStep | string;
   brand_structure?: BrandStructure | null;
+  group_website_url?: string | null;
   product_count?: number;
   sub_product_count?: number;
   social_account_count?: number;
@@ -117,12 +118,27 @@ export type CompanyBrandProfile = {
   [key: string]: unknown;
 };
 
+export type DashboardConceptSummary = {
+  id: string;
+  hook: string;
+  status: string;
+  scheduled_at?: string | null;
+  published_at?: string | null;
+  updated_at: string;
+};
+
 export type ProductDashboard = {
   drafts?: number;
   pending_approvals?: number;
   scheduled?: number;
   published?: number;
   failed_jobs?: number;
-  social_accounts?: number;
+  social_accounts_total?: number;
+  social_accounts_active?: number;
+  recent_content?: DashboardConceptSummary[];
+  pending_approvals_list?: DashboardConceptSummary[];
+  upcoming_scheduled?: DashboardConceptSummary[];
+  top_performing?: DashboardConceptSummary[];
+  ai_recommendations?: string[];
   [key: string]: unknown;
 };

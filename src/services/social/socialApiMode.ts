@@ -3,7 +3,7 @@ export function isLiveSocialApi(): boolean {
 }
 
 export function oauthReturnUrl(): string {
-  return `${window.location.origin}/app/social/oauth/callback`;
+  return `${window.location.origin}/app/social-accounts/oauth/callback`;
 }
 
 export function followAuthorizationUrl(

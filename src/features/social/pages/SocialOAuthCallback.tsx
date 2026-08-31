@@ -8,7 +8,7 @@ export function SocialOAuthCallbackPage() {
 
   useEffect(() => {
     const next = new URLSearchParams(params);
-    navigate(`/app/social/accounts?${next.toString()}`, { replace: true });
+    navigate(`/app/social-accounts?${next.toString()}`, { replace: true });
   }, [navigate, params]);
 
   return (

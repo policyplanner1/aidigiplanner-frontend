@@ -34,6 +34,19 @@ export type SocialCampaign = {
   status: "active" | "paused" | "completed";
   start: string;
   end: string;
+  // Optional fields from spec §38 — campaigns have no backend entity at all
+  // (deliberately removed from aidigiplanner-backend), so this whole feature
+  // stays local/mock, same as the rest of this service.
+  objective?: string;
+  subProductIds?: string[];
+  platforms?: string[];
+  offer?: string;
+  audience?: string;
+  postCount?: number;
+  frequency?: string;
+  occasion?: string;
+  cta?: string;
+  landingPage?: string;
 };
 
 export type InboxReply = {
@@ -127,7 +140,7 @@ function seedPosts(projectId: string): SocialPost[] {
       hashtags: "#ClaimsMadeSimple #Reel",
       hook: "If you only save one reel this week, make it this checklist.",
       script:
-        "0-3s: Hook on-screen\n3-12s: Documents you need\n12-25s: Who to call\n25-35s: CTA to Brand Kit offer",
+        "0-3s: Hook on-screen\n3-12s: Documents you need\n12-25s: Who to call\n25-35s: CTA to Brand Profile offer",
       cta: "Follow for weekly policy tips.",
       day: "Wed",
       time: "19:30",
@@ -481,6 +494,30 @@ export function getSocialCampaigns(projectId: string): SocialCampaign[] {
   ensureProjectData(projectId);
   return readJson<SocialCampaign[]>(CAMPAIGNS_KEY, []).filter(
     (item) => item.projectId === projectId,
+  );
+}
+
+export function getSocialCampaign(campaignId: string): SocialCampaign | null {
+  return readJson<SocialCampaign[]>(CAMPAIGNS_KEY, []).find((item) => item.id === campaignId) ?? null;
+}
+
+export function saveSocialCampaign(input: Omit<SocialCampaign, "id"> & { id?: string }): SocialCampaign {
+  const campaigns = readJson<SocialCampaign[]>(CAMPAIGNS_KEY, []);
+  const campaign: SocialCampaign = { ...input, id: input.id ?? `campaign_${Date.now()}` };
+  const next = campaigns.some((item) => item.id === campaign.id)
+    ? campaigns.map((item) => (item.id === campaign.id ? campaign : item))
+    : [campaign, ...campaigns];
+  writeJson(CAMPAIGNS_KEY, next);
+  return campaign;
+}
+
+export function deleteSocialCampaign(campaignId: string) {
+  const campaigns = readJson<SocialCampaign[]>(CAMPAIGNS_KEY, []);
+  writeJson(CAMPAIGNS_KEY, campaigns.filter((item) => item.id !== campaignId));
+  const posts = readJson<SocialPost[]>(POSTS_KEY, []);
+  writeJson(
+    POSTS_KEY,
+    posts.map((item) => (item.campaignId === campaignId ? { ...item, campaignId: null } : item)),
   );
 }
 

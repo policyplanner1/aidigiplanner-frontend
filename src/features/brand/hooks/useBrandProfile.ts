@@ -1,12 +1,12 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
-  liveKitFromProfile,
-  kitToProfileBody,
-  profileToKit,
-  saveBrandKit,
-  type BrandKit,
-} from "../../../services/brand/brandKitService";
+  liveFormFromProfile,
+  formToProfileBody,
+  profileToForm,
+  saveBrandProfileForm,
+  type BrandProfileForm,
+} from "../../../services/brand/brandProfileService";
 import { brandProfileKey, getBrandProfile, saveBrandProfile } from "../../../services/brand/brandProfileApi";
 
 export function useBrandProfile(projectId: string, _projectName: string, live: boolean) {
@@ -14,7 +14,7 @@ export function useBrandProfile(projectId: string, _projectName: string, live: b
     queryKey: brandProfileKey(projectId),
     queryFn: async () => {
       const profile = await getBrandProfile(projectId);
-      return liveKitFromProfile(projectId, profile);
+      return liveFormFromProfile(projectId, profile);
     },
     enabled: Boolean(projectId) && live,
   });
@@ -24,19 +24,19 @@ export function useSaveBrandProfile(projectId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { kit: BrandKit; projectName: string }) => {
-      const saved = await saveBrandProfile(projectId, kitToProfileBody(input.kit, input.projectName));
-      const merged = profileToKit(saved, input.kit);
-      saveBrandKit(merged);
+    mutationFn: async (input: { form: BrandProfileForm; projectName: string }) => {
+      const saved = await saveBrandProfile(projectId, formToProfileBody(input.form, input.projectName));
+      const merged = profileToForm(saved, input.form);
+      saveBrandProfileForm(merged);
       return merged;
     },
-    onSuccess: (kit) => {
-      queryClient.setQueryData(brandProfileKey(projectId), kit);
+    onSuccess: (form) => {
+      queryClient.setQueryData(brandProfileKey(projectId), form);
     },
   });
 }
 
-export function useBrandKits(
+export function useBrandProfiles(
   projects: Array<{ id: string; name: string }>,
   live: boolean,
 ) {
@@ -45,7 +45,7 @@ export function useBrandKits(
       queryKey: brandProfileKey(project.id),
       queryFn: async () => {
         const profile = await getBrandProfile(project.id);
-        return liveKitFromProfile(project.id, profile);
+        return liveFormFromProfile(project.id, profile);
       },
       enabled: live && Boolean(project.id),
     })),

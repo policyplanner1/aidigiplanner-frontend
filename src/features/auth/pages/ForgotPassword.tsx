@@ -7,17 +7,12 @@ import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import { TYPE } from "../../../constants/fonts";
 import { getApiErrorMessage, isLiveAuth } from "../../../services/api/errors";
 import { authApi } from "../../../services/auth/authApi";
-import {
-  forgotEmailSchema,
-  resetPasswordSchema,
-  type ForgotEmailValues,
-  type ResetPasswordValues,
-} from "../schemas/authSchemas";
+import { forgotEmailSchema, type ForgotEmailValues } from "../schemas/authSchemas";
 import { OtpBoxes } from "../components/OtpBoxes";
 
-type Step = "email" | "otp" | "password" | "done";
+type Step = "email" | "otp";
 
-const steps: Step[] = ["email", "otp", "password"];
+const steps: Step[] = ["email", "otp"];
 
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
@@ -30,7 +25,6 @@ export function ForgotPasswordPage() {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState(seededEmail);
   const [otp, setOtp] = useState("");
-  const [resetToken, setResetToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const verifyingRef = useRef(false);
@@ -38,11 +32,6 @@ export function ForgotPasswordPage() {
   const emailForm = useForm<ForgotEmailValues>({
     resolver: zodResolver(forgotEmailSchema),
     defaultValues: { email: seededEmail },
-  });
-
-  const passwordForm = useForm<ResetPasswordValues>({
-    resolver: zodResolver(resetPasswordSchema),
-    defaultValues: { password: "", confirmPassword: "" },
   });
 
   const sendOtp = async (values: ForgotEmailValues) => {
@@ -70,8 +59,10 @@ export function ForgotPasswordPage() {
     setError(null);
     try {
       const result = await authApi.verifyResetOtp({ email, otp: code });
-      setResetToken(result.resetToken);
-      setStep("password");
+      navigate("/reset-password", {
+        replace: true,
+        state: { email, otp: code, resetToken: result.resetToken, from: locationState?.from },
+      });
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -80,64 +71,34 @@ export function ForgotPasswordPage() {
     }
   };
 
-  const savePassword = async (values: ResetPasswordValues) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await authApi.resetPassword({
-        email,
-        otp,
-        new_password: values.password,
-        reset_token: resetToken,
-      });
-      setStep("done");
-    } catch (err) {
-      setError(getApiErrorMessage(err));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const stepIndex = steps.indexOf(step === "done" ? "password" : step);
+  const stepIndex = steps.indexOf(step);
 
   return (
     <Box>
       <Typography sx={{ ...TYPE.eyebrow, color: "secondary.dark" }}>Account recovery</Typography>
       <Typography sx={{ ...TYPE.title, mt: 0.75, fontSize: "1.45rem" }}>
-        {step === "email"
-          ? "Forgot password"
-          : step === "otp"
-            ? "Enter OTP"
-            : step === "password"
-              ? "Set a new password"
-              : "Password updated"}
+        {step === "email" ? "Forgot password" : "Enter OTP"}
       </Typography>
       <Typography sx={{ ...TYPE.body, color: "text.secondary", mt: 0.75, mb: 2.5 }}>
         {step === "email"
           ? "We’ll send a 6-digit code to your email."
-          : step === "otp"
-            ? `Type the code sent to ${email}.`
-            : step === "password"
-              ? "Choose a new password for this account."
-              : "You can sign in with your new password."}
+          : `Type the code sent to ${email}.`}
       </Typography>
 
-      {step !== "done" ? (
-        <Box sx={{ display: "flex", gap: 0.75, mb: 2.5 }}>
-          {steps.map((item, index) => (
-            <Box
-              key={item}
-              sx={{
-                flex: 1,
-                height: 4,
-                borderRadius: "999px",
-                backgroundColor: index <= stepIndex ? "#1F8A80" : "rgba(232,221,210,0.9)",
-                transition: "background-color 0.25s ease",
-              }}
-            />
-          ))}
-        </Box>
-      ) : null}
+      <Box sx={{ display: "flex", gap: 0.75, mb: 2.5 }}>
+        {steps.map((item, index) => (
+          <Box
+            key={item}
+            sx={{
+              flex: 1,
+              height: 4,
+              borderRadius: "999px",
+              backgroundColor: index <= stepIndex ? "#1F8A80" : "rgba(232,221,210,0.9)",
+              transition: "background-color 0.25s ease",
+            }}
+          />
+        ))}
+      </Box>
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
@@ -223,70 +184,14 @@ export function ForgotPasswordPage() {
             </Button>
           </Box>
         ) : null}
-
-        {step === "password" ? (
-          <Box component="form" onSubmit={passwordForm.handleSubmit(savePassword)} noValidate>
-            <TextField
-              label="New password"
-              type="password"
-              fullWidth
-              autoComplete="new-password"
-              margin="normal"
-              placeholder="At least 10 characters"
-              error={Boolean(passwordForm.formState.errors.password)}
-              helperText={passwordForm.formState.errors.password?.message}
-              {...passwordForm.register("password")}
-            />
-            <TextField
-              label="Confirm password"
-              type="password"
-              fullWidth
-              autoComplete="new-password"
-              margin="normal"
-              placeholder="Re-enter your password"
-              error={Boolean(passwordForm.formState.errors.confirmPassword)}
-              helperText={passwordForm.formState.errors.confirmPassword?.message}
-              {...passwordForm.register("confirmPassword")}
-            />
-            <Button
-              type="submit"
-              variant="contained"
-              fullWidth
-              size="large"
-              disabled={busy}
-              sx={{ mt: 2.5, borderRadius: "999px", py: 1.15 }}
-            >
-              {busy ? "Saving..." : "Save password"}
-            </Button>
-          </Box>
-        ) : null}
-
-        {step === "done" ? (
-          <Box>
-            <Alert severity="success" sx={{ mb: 2 }}>
-              Your password was reset. Sign in with the new one.
-            </Alert>
-            <Button
-              variant="contained"
-              fullWidth
-              size="large"
-              onClick={() => navigate(signInPath, { replace: true })}
-              sx={{ borderRadius: "999px", py: 1.15 }}
-            >
-              Back to sign in
-            </Button>
-          </Box>
-        ) : null}
       </Box>
 
-      {step !== "done" ? (
-        <Typography sx={{ mt: 2 }} color="text.secondary">
-          Remembered it?{" "}
-          <Link component={RouterLink} to={signInPath}>
-            Sign in
-          </Link>
-        </Typography>
-      ) : null}
+      <Typography sx={{ mt: 2 }} color="text.secondary">
+        Remembered it?{" "}
+        <Link component={RouterLink} to={signInPath}>
+          Sign in
+        </Link>
+      </Typography>
     </Box>
   );
 }

@@ -35,7 +35,7 @@ export function SocialInboxPage() {
     return <NeedProject feature="Inbox" />;
   }
 
-  const canReply = can(PERMISSIONS.SOCIAL_PUBLISH) || can(PERMISSIONS.CONTENT_CREATE);
+  const canReply = can(PERMISSIONS.SOCIAL_MANAGE) || can(PERMISSIONS.CONTENT_CREATE);
 
   return (
     <ScreenFrame>

@@ -1,7 +1,6 @@
 import {
   AutoAwesome,
-  Campaign,
-  ContactPage,
+  // Campaign, ContactPage: only used by the disabled Leads/CRM module cards below.
   Share,
 } from "@mui/icons-material";
 import {
@@ -46,7 +45,7 @@ export function ProjectDetailsPage() {
   const [tab, setTab] = useState<ProjectTab>("overview");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const canManage = can(PERMISSIONS.BRANDS_MANAGE);
+  const canManage = can(PERMISSIONS.PRODUCT_DELETE);
   const live = session?.source === "api";
   const deleteLiveProject = useDeleteCompanyProject(organization?.id ?? "");
 
@@ -59,12 +58,13 @@ export function ProjectDetailsPage() {
   ];
   if (project?.modules.social) tabs.push({ id: "social", label: "Social accounts" });
   if (project?.modules.marketing) tabs.push({ id: "marketing", label: "Marketing" });
-  if (project?.modules.leads) tabs.push({ id: "leads", label: "Lead generation" });
-  if (project?.modules.crm) tabs.push({ id: "crm", label: "CRM" });
+  // No Leads/CRM module in aidigiplanner-backend yet — see constants/navigation.ts.
+  // if (project?.modules.leads) tabs.push({ id: "leads", label: "Lead generation" });
+  // if (project?.modules.crm) tabs.push({ id: "crm", label: "CRM" });
   tabs.push({ id: "team", label: "Team" });
 
   if (!projectId || !project) {
-    return <Navigate to="/app/projects" replace />;
+    return <Navigate to="/app/products" replace />;
   }
 
   const connected = accounts.filter((account) => account.status === "connected");
@@ -76,7 +76,7 @@ export function ProjectDetailsPage() {
       try {
         await deleteLiveProject.mutateAsync(project.id);
         setConfirmDelete(false);
-        navigate("/app/projects");
+        navigate("/app/products");
       } catch (error) {
         setDeleteError(getApiErrorMessage(error));
       }
@@ -87,7 +87,7 @@ export function ProjectDetailsPage() {
     deleteProject(project.id);
     setCurrentProjectId(remaining[0]?.id ?? null);
     setConfirmDelete(false);
-    navigate("/app/projects");
+    navigate("/app/products");
   };
 
   return (
@@ -100,7 +100,7 @@ export function ProjectDetailsPage() {
         action={
           <>
             {project.modules.marketing ? (
-              <Button variant="contained" onClick={() => navigate("/app/social/content")}>
+              <Button variant="contained" onClick={() => navigate("/app/create")}>
                 Create content
               </Button>
             ) : null}
@@ -183,6 +183,7 @@ export function ProjectDetailsPage() {
               onClick={() => setTab("marketing")}
             />
           ) : null}
+          {/* No Leads/CRM module in aidigiplanner-backend yet — see constants/navigation.ts.
           {project.modules.leads ? (
             <ModuleCard
               icon={<Campaign />}
@@ -201,6 +202,7 @@ export function ProjectDetailsPage() {
               onClick={() => setTab("crm")}
             />
           ) : null}
+          */}
           </Box>
         </Box>
       ) : null}
@@ -219,12 +221,12 @@ export function ProjectDetailsPage() {
             <Typography color="text.secondary">
               Connect the accounts this project is allowed to publish to.
             </Typography>
-            {can(PERMISSIONS.SOCIAL_CONNECT) ? (
+            {can(PERMISSIONS.SOCIAL_MANAGE) ? (
               <Button
                 variant="contained"
                 onClick={() => {
                   setCurrentProjectId(project.id);
-                  navigate("/app/social/accounts");
+                  navigate("/app/social-accounts");
                 }}
               >
                 Manage accounts
@@ -268,12 +270,12 @@ export function ProjectDetailsPage() {
                         label={account ? "Connected" : "Not connected"}
                       />
                     </Box>
-                    {account && can(PERMISSIONS.SOCIAL_CONNECT) ? (
+                    {account && can(PERMISSIONS.SOCIAL_MANAGE) ? (
                       <Button
                         sx={{ mt: 2 }}
                         onClick={() => {
                           setCurrentProjectId(project.id);
-                          navigate("/app/social/accounts");
+                          navigate("/app/social-accounts");
                         }}
                       >
                         Manage
@@ -292,10 +294,11 @@ export function ProjectDetailsPage() {
           title="AI content studio"
           body="Create posts, reels, shorts, videos, and blogs from this project's brand voice, then schedule or send for approval."
           action="Open content studio"
-          onClick={() => navigate("/app/social/content")}
+          onClick={() => navigate("/app/create")}
         />
       ) : null}
 
+      {/* No Leads/CRM module in aidigiplanner-backend yet — see constants/navigation.ts.
       {tab === "leads" ? (
         <ComingModule
           title="Lead engine"
@@ -313,13 +316,14 @@ export function ProjectDetailsPage() {
           onClick={() => navigate("/app/crm")}
         />
       ) : null}
+      */}
 
       {tab === "team" ? (
         <ProjectTeamPanel
           projectId={project.id}
           companyId={organization?.id ?? session?.organizationId}
           live={session?.source === "api"}
-          canManage={can(PERMISSIONS.USERS_MANAGE)}
+          canManage={can(PERMISSIONS.TEAM_MANAGE)}
         />
       ) : null}
     </Box>

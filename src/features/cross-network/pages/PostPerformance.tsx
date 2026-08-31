@@ -133,7 +133,7 @@ export function PostPerformancePage() {
     }
   }, [activeId, sortedPosts]);
 
-  if (!can(PERMISSIONS.CROSS_NETWORK_VIEW)) {
+  if (!can(PERMISSIONS.ANALYTICS_VIEW)) {
     return <Navigate to="/app/dashboard" replace />;
   }
 
@@ -182,6 +182,10 @@ export function PostPerformancePage() {
   return (
     <ScreenFrame>
       <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
+          <Alert severity="info">
+            Sample data — aidigiplanner-backend doesn't have a real analytics module yet.
+            Connected accounts below are real; the metrics are illustrative, not live.
+          </Alert>
           <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap", flexShrink: 0 }}>
             <Box>
               <Typography sx={{ ...TYPE.title, fontSize: { xs: "1.35rem", md: "1.55rem" } }}>

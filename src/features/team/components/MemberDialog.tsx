@@ -59,7 +59,7 @@ export function MemberDialog({
     defaultValues: {
       name: "",
       email: "",
-      role: "SOCIAL_MANAGER",
+      role: "PRODUCT_MANAGER",
       status: "active",
       productAccess: [],
     },
@@ -74,7 +74,7 @@ export function MemberDialog({
       initial ?? {
         name: "",
         email: "",
-        role: "SOCIAL_MANAGER",
+        role: "PRODUCT_MANAGER",
         status: "active",
         productAccess: [],
       },
@@ -177,9 +177,9 @@ export function MemberDialog({
             )}
           />
 
-          {role === "ADMIN" ? (
+          {role === "COMPANY_ADMIN" ? (
             <Typography color="text.secondary" sx={{ mt: 1.5 }}>
-              Organization admins can open and manage every product in this
+              Company admins can open and manage every product in this
               workspace.
             </Typography>
           ) : (

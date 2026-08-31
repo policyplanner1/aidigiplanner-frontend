@@ -16,15 +16,17 @@ import {
   useCreateCompanyProject,
 } from "../../projects/hooks/useCompanyProjects";
 import type { ProjectFormValues } from "../../projects/schemas/projectSchema";
-import { AttentionPanels } from "../components/AttentionPanels";
+import { AiRecommendationsPanel, AttentionPanels, TopPerformingPanel } from "../components/AttentionPanels";
 import { DashboardHero } from "../components/DashboardHero";
 import { DashboardSection } from "../components/DashboardSection";
 import { FeatureSnapshotGrid } from "../components/FeatureSnapshotGrid";
 import { KpiTile } from "../components/KpiTile";
 import {
+  buildAiRecommendations,
   formatDashboardDate,
   getDashboardSnapshot,
   greetingForNow,
+  type AttentionItem,
 } from "../dashboardData";
 import { dashboardCount, useProductDashboard } from "../hooks/useProductDashboard";
 
@@ -35,7 +37,7 @@ export function Dashboard() {
   const { organization, projects, currentProject, setCurrentProjectId } = useWorkspace();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const canManage = can(PERMISSIONS.BRANDS_MANAGE);
+  const canManage = can(PERMISSIONS.PRODUCT_CREATE);
   const live = session?.source === "api";
   useCompanyProjects(organization?.id, live);
   const createLiveProject = useCreateCompanyProject(organization?.id ?? "");
@@ -51,7 +53,31 @@ export function Dashboard() {
   const scheduled = liveDash.data ? dashboardCount(liveDash.data, "scheduled") : snapshot.scheduled;
   const published = liveDash.data ? dashboardCount(liveDash.data, "published") : snapshot.published;
   const failed = liveDash.data ? dashboardCount(liveDash.data, "failed_jobs") : 0;
-  const socials = liveDash.data ? dashboardCount(liveDash.data, "social_accounts") : snapshot.connected;
+  const socials = liveDash.data ? dashboardCount(liveDash.data, "social_accounts_total") : snapshot.connected;
+
+  const attentionItems: AttentionItem[] = liveDash.data
+    ? (liveDash.data.pending_approvals_list ?? []).slice(0, 5).map((item) => ({
+        id: item.id,
+        label: "Waiting approval",
+        detail: item.hook,
+        path: "/app/approvals",
+        tone: "info" as const,
+      }))
+    : snapshot.attention;
+
+  const topPerforming = liveDash.data
+    ? (liveDash.data.top_performing ?? []).map((item) => ({
+        id: item.id,
+        label: item.hook,
+        detail: item.published_at ? new Date(item.published_at).toLocaleDateString() : "Published",
+      }))
+    : snapshot.weekPosts
+        .filter((item) => item.status === "published")
+        .map((item) => ({ id: item.id, label: item.title, detail: `${item.day} ${item.time}` }));
+
+  const aiRecommendations = liveDash.data
+    ? (liveDash.data.ai_recommendations ?? [])
+    : buildAiRecommendations({ drafts, pending, published, socials });
 
   const visibleSnapshots = snapshot.snapshots.filter((item) => can(item.permission));
   const firstName = user?.name?.split(" ")[0] ?? "there";
@@ -67,7 +93,7 @@ export function Dashboard() {
           description: values.description?.trim() || null,
         });
         setDialogOpen(false);
-        navigate(`/app/projects/${created.id}`);
+        navigate(`/app/products/${created.id}`);
       } catch (error) {
         setCreateError(getApiErrorMessage(error));
       }
@@ -89,7 +115,7 @@ export function Dashboard() {
 
     setCurrentProjectId(project.id);
     setDialogOpen(false);
-    navigate(`/app/projects/${project.id}`);
+    navigate(`/app/products/${project.id}`);
   };
 
   const open = (path: string) => navigate(path);
@@ -108,12 +134,13 @@ export function Dashboard() {
         inReview={pending}
         trend={snapshot.analytics.trend}
         canCreateProject={canManage}
-        showInbox={can(PERMISSIONS.SOCIAL_VIEW)}
-        showStudio={can(PERMISSIONS.CONTENT_VIEW)}
+        // No inbox module in aidigiplanner-backend yet — see constants/navigation.ts.
+        showInbox={false}
+        showStudio={can(PERMISSIONS.CONTENT_EDIT)}
         onCreateProject={() => setDialogOpen(true)}
-        onCreateContent={() => open("/app/social/content")}
-        onOpenInbox={() => open("/app/social/inbox")}
-        onOpenAnalytics={() => open("/app/social/analytics")}
+        onCreateContent={() => open("/app/create")}
+        onOpenInbox={() => open("/app/social-accounts")}
+        onOpenAnalytics={() => open("/app/calendar")}
       />
 
       <Box
@@ -130,7 +157,7 @@ export function Dashboard() {
           accent="#FF6B45"
           icon={<FolderOutlined sx={{ fontSize: 16 }} />}
           delay={40}
-          onClick={() => open("/app/social/calendar")}
+          onClick={() => open("/app/calendar")}
         />
         <KpiTile
           label="Pending approvals"
@@ -139,7 +166,7 @@ export function Dashboard() {
           accent="#E8A838"
           icon={<InboxOutlined sx={{ fontSize: 16 }} />}
           delay={80}
-          onClick={() => open("/app/social/approvals")}
+          onClick={() => open("/app/approvals")}
         />
         <KpiTile
           label="Scheduled posts"
@@ -148,7 +175,7 @@ export function Dashboard() {
           accent="#1F8A80"
           icon={<ScheduleOutlined sx={{ fontSize: 16 }} />}
           delay={120}
-          onClick={() => open("/app/social/calendar")}
+          onClick={() => open("/app/calendar")}
         />
         <KpiTile
           label="Published posts"
@@ -157,7 +184,7 @@ export function Dashboard() {
           accent="#7C5CFC"
           icon={<Campaign sx={{ fontSize: 16 }} />}
           delay={160}
-          onClick={() => open("/app/social/analytics")}
+          onClick={() => open("/app/calendar")}
         />
         <KpiTile
           label="Failed posts"
@@ -166,7 +193,7 @@ export function Dashboard() {
           accent="#C45C4A"
           icon={<ErrorOutlined sx={{ fontSize: 16 }} />}
           delay={200}
-          onClick={() => open("/app/social/calendar")}
+          onClick={() => open("/app/calendar")}
         />
         <KpiTile
           label="Social accounts"
@@ -175,7 +202,7 @@ export function Dashboard() {
           accent="#176E66"
           icon={<ShareOutlined sx={{ fontSize: 16 }} />}
           delay={240}
-          onClick={() => open("/app/social/accounts")}
+          onClick={() => open("/app/social-accounts")}
         />
       </Box>
 
@@ -189,10 +216,21 @@ export function Dashboard() {
       </Box>
 
       <AttentionPanels
-        attention={snapshot.attention}
+        attention={attentionItems}
         weekPosts={snapshot.weekPosts}
         onOpen={open}
       />
+
+      <Box
+        sx={{
+          display: "grid",
+          gap: 2,
+          gridTemplateColumns: { xs: "1fr", lg: "1.1fr 0.9fr" },
+        }}
+      >
+        <TopPerformingPanel items={topPerforming} onOpen={open} />
+        <AiRecommendationsPanel items={aiRecommendations} />
+      </Box>
 
       <AddProjectDialog
         open={dialogOpen}

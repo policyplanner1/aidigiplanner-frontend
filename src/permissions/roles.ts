@@ -1,62 +1,60 @@
 import type { RoleName } from "../types/auth";
 import { PERMISSIONS } from "./permissions";
 
-const ALL_ORGANIZATION_PERMISSIONS = Object.values(PERMISSIONS).filter(
-  (permission) => !permission.startsWith("platform."),
-);
+const ALL_ORGANIZATION_PERMISSIONS = Object.values(PERMISSIONS);
 
+// Per spec §19-26: a member's *permissions* drive UI, not the role name alone —
+// these per-role sets are just the sensible default a role grants on invite.
 const ROLE_PERMISSIONS: Record<RoleName, string[]> = {
   SUPER_ADMIN: ["*"],
-  ADMIN: ALL_ORGANIZATION_PERMISSIONS,
-  SOCIAL_MANAGER: [
-    PERMISSIONS.BRANDS_VIEW,
-    PERMISSIONS.SOCIAL_VIEW,
-    PERMISSIONS.SOCIAL_CONNECT,
-    PERMISSIONS.SOCIAL_PUBLISH,
-    PERMISSIONS.CONTENT_VIEW,
-    PERMISSIONS.CONTENT_CREATE,
-    PERMISSIONS.CONTENT_EDIT,
-    PERMISSIONS.CAMPAIGN_VIEW,
-    PERMISSIONS.AGENTS_VIEW,
-    PERMISSIONS.ANALYTICS_VIEW,
-    PERMISSIONS.SETTINGS_VIEW,
-  ],
-  CONTENT_MANAGER: [
-    PERMISSIONS.BRANDS_VIEW,
-    PERMISSIONS.CONTENT_VIEW,
+
+  // Company Admin: full access to everything within their company.
+  COMPANY_ADMIN: ALL_ORGANIZATION_PERMISSIONS,
+
+  // Product Manager: manages assigned products end-to-end, but not company
+  // ownership, billing, or products they aren't assigned to (§22).
+  PRODUCT_MANAGER: [
+    PERMISSIONS.PRODUCT_VIEW,
+    PERMISSIONS.PRODUCT_EDIT,
+    PERMISSIONS.SUBPRODUCT_MANAGE,
+    PERMISSIONS.TEAM_MANAGE,
     PERMISSIONS.CONTENT_CREATE,
     PERMISSIONS.CONTENT_EDIT,
     PERMISSIONS.CONTENT_APPROVE,
-    PERMISSIONS.CAMPAIGN_VIEW,
-    PERMISSIONS.SOCIAL_VIEW,
-    PERMISSIONS.AGENTS_VIEW,
+    PERMISSIONS.CONTENT_PUBLISH,
+    PERMISSIONS.SOCIAL_MANAGE,
+    PERMISSIONS.CAMPAIGN_MANAGE,
     PERMISSIONS.ANALYTICS_VIEW,
-    PERMISSIONS.SETTINGS_VIEW,
   ],
-  SALES_MANAGER: [
-    PERMISSIONS.BRANDS_VIEW,
-    PERMISSIONS.LEADS_VIEW,
-    PERMISSIONS.LEADS_CREATE,
-    PERMISSIONS.LEADS_MANAGE,
-    PERMISSIONS.CRM_VIEW,
-    PERMISSIONS.CRM_MANAGE,
-    PERMISSIONS.ANALYTICS_VIEW,
-    PERMISSIONS.SETTINGS_VIEW,
+
+  // Content Creator: creates/edits their own drafts and submits for approval;
+  // cannot approve, publish, or manage social connections (§23).
+  CONTENT_CREATOR: [
+    PERMISSIONS.PRODUCT_VIEW,
+    PERMISSIONS.CONTENT_CREATE,
+    PERMISSIONS.CONTENT_EDIT,
+    PERMISSIONS.CONTENT_DELETE,
   ],
+
+  // Approver: reviews the approval queue only (§24). Analytics access is
+  // "if permitted" per spec — granted per-invite, not part of the base role.
+  APPROVER: [
+    PERMISSIONS.PRODUCT_VIEW,
+    PERMISSIONS.CONTENT_APPROVE,
+  ],
+
+  // Publisher: publishes/schedules already-approved content and selects
+  // which connected accounts to publish to (§25).
+  PUBLISHER: [
+    PERMISSIONS.PRODUCT_VIEW,
+    PERMISSIONS.CONTENT_PUBLISH,
+    PERMISSIONS.SOCIAL_MANAGE,
+  ],
+
+  // Analyst: read-only (§26).
   ANALYST: [
-    PERMISSIONS.BRANDS_VIEW,
-    PERMISSIONS.CONTENT_VIEW,
-    PERMISSIONS.LEADS_VIEW,
+    PERMISSIONS.PRODUCT_VIEW,
     PERMISSIONS.ANALYTICS_VIEW,
-    PERMISSIONS.ANALYTICS_EXPORT,
-    PERMISSIONS.SETTINGS_VIEW,
-  ],
-  USER: [
-    PERMISSIONS.BRANDS_VIEW,
-    PERMISSIONS.SOCIAL_VIEW,
-    PERMISSIONS.CONTENT_VIEW,
-    PERMISSIONS.ANALYTICS_VIEW,
-    PERMISSIONS.SETTINGS_VIEW,
   ],
 };
 
@@ -64,21 +62,17 @@ export function getPermissionsForRole(role: RoleName): string[] {
   return ROLE_PERMISSIONS[role];
 }
 
-const PRODUCT_MANAGER_PERMISSIONS = ALL_ORGANIZATION_PERMISSIONS.filter(
-  (permission) =>
-    permission !== PERMISSIONS.USERS_VIEW &&
-    permission !== PERMISSIONS.USERS_MANAGE &&
-    permission !== PERMISSIONS.BILLING_VIEW &&
-    permission !== PERMISSIONS.CROSS_NETWORK_VIEW,
-);
-
+// Legacy per-product module-access shape from the mock/demo team flow
+// (services/auth/mockAuth.ts, services/team/teamService.ts) — mock login is
+// disabled (see hooks/useAuth.ts), so this path is unreachable today. Kept
+// only so that dead code still compiles; the live team model
+// (services/team/liveTeam.ts) grants COMPANY_ADMIN or the invited
+// ProductInviteRole directly instead of this per-module flag set.
 function permissionMatchesModule(
   permission: string,
   access: {
     social: boolean;
     marketing: boolean;
-    leads: boolean;
-    crm: boolean;
   },
 ): boolean {
   if (
@@ -88,14 +82,8 @@ function permissionMatchesModule(
   ) {
     return access.social;
   }
-  if (permission.startsWith("content.") || permission.startsWith("agents.")) {
+  if (permission.startsWith("content.")) {
     return access.marketing;
-  }
-  if (permission.startsWith("leads.")) {
-    return access.leads;
-  }
-  if (permission.startsWith("crm.")) {
-    return access.crm;
   }
   return true;
 }
@@ -113,11 +101,11 @@ export function getPermissionsForProductAccess(
     | undefined,
 ): string[] {
   if (role === "SUPER_ADMIN") return ["*"];
-  if (role === "ADMIN") return ROLE_PERMISSIONS.ADMIN;
-  if (!access) return [PERMISSIONS.BRANDS_VIEW, PERMISSIONS.SETTINGS_VIEW];
+  if (role === "COMPANY_ADMIN") return ROLE_PERMISSIONS.COMPANY_ADMIN;
+  if (!access) return [PERMISSIONS.PRODUCT_VIEW];
 
   if (access.manageAll) {
-    return PRODUCT_MANAGER_PERMISSIONS;
+    return ROLE_PERMISSIONS.PRODUCT_MANAGER;
   }
 
   return getPermissionsForRole(role).filter((permission) =>
@@ -127,12 +115,12 @@ export function getPermissionsForProductAccess(
 
 export const ROLE_LABELS: Record<RoleName, string> = {
   SUPER_ADMIN: "Super Admin",
-  ADMIN: "Organization Admin",
-  SOCIAL_MANAGER: "Social Media Manager",
-  CONTENT_MANAGER: "Content Manager",
-  SALES_MANAGER: "Sales Manager",
+  COMPANY_ADMIN: "Company Admin",
+  PRODUCT_MANAGER: "Product Manager",
+  CONTENT_CREATOR: "Content Creator",
+  APPROVER: "Approver",
+  PUBLISHER: "Publisher",
   ANALYST: "Analyst",
-  USER: "User",
 };
 
 export function accountDisplayName(user: {

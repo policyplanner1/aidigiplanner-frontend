@@ -20,6 +20,7 @@ import { useState } from "react";
 
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { getApiErrorMessage } from "../../../services/api/errors";
+import { pushNotification } from "../../../store/notificationStore";
 import {
   companyRoleLabel,
   type LiveTeamMember,
@@ -86,9 +87,11 @@ export function LiveTeamPanel({
     setError(null);
     try {
       if (editing) {
+        // Only the company-level role (company_admin/member) can change here —
+        // per-product role changes have no update endpoint, only add/remove.
         await updateMember.mutateAsync({
           memberId: editing.id,
-          role: values.role,
+          role: editing.role,
           status: values.status,
         });
         setBanner(`${values.name || editing.name} was updated.`);
@@ -97,9 +100,15 @@ export function LiveTeamPanel({
           name: values.name,
           email: values.email,
           role: values.role,
-          projectIds: values.role === "member" ? values.projectIds : [],
+          projectIds: values.role !== "company_admin" ? values.projectIds : [],
         });
         setBanner(`${values.name} was added. They can sign in with ${values.email}.`);
+        pushNotification({
+          type: "invitation_sent",
+          title: "Invitation sent",
+          detail: `${values.name} (${values.email})`,
+          path: "/app/team",
+        });
       }
       closeDialog();
     } catch (err) {

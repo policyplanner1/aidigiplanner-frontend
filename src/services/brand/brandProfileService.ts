@@ -3,14 +3,14 @@ import { getBrandProfile, saveBrandProfile } from "./brandProfileApi";
 
 export const BRAND_TRAITS = ["Professional", "Trustworthy", "Friendly", "Warm", "Expert"] as const;
 
-export type BrandKitProductLine = {
+export type BrandProfileProductLine = {
   id: string;
   label: string;
   partners: string;
   hooks: string;
 };
 
-export type BrandKit = {
+export type BrandProfileForm = {
   projectId: string;
   voice: string;
   audience: string;
@@ -29,7 +29,7 @@ export type BrandKit = {
   tone: string;
   avoid: string;
   products: string;
-  productLines: BrandKitProductLine[];
+  productLines: BrandProfileProductLine[];
   knowledgeNotes: string;
   knowledgeUrls: string;
   aiInstructions: string;
@@ -43,9 +43,9 @@ export type BrandKit = {
   hashtagBank: string;
 };
 
-const KEY = "ai-growth-brand-kits";
+const KEY = "ai-growth-brand-profiles";
 
-const REQUIRED_FIELDS: (keyof BrandKit)[] = [
+const REQUIRED_FIELDS: (keyof BrandProfileForm)[] = [
   "voice",
   "audience",
   "language",
@@ -53,11 +53,11 @@ const REQUIRED_FIELDS: (keyof BrandKit)[] = [
   "secondaryColor",
 ];
 
-function readKits(): BrandKit[] {
+function readForms(): BrandProfileForm[] {
   const raw = localStorage.getItem(KEY);
   if (!raw) return [];
   try {
-    return JSON.parse(raw) as BrandKit[];
+    return JSON.parse(raw) as BrandProfileForm[];
   } catch {
     return [];
   }
@@ -68,7 +68,7 @@ export function websiteFromName(name: string) {
   return host ? `${host}.com` : "";
 }
 
-export function emptyBrandKit(projectId: string): BrandKit {
+export function emptyBrandProfileForm(projectId: string): BrandProfileForm {
   return {
     projectId,
     voice: "",
@@ -103,10 +103,10 @@ export function emptyBrandKit(projectId: string): BrandKit {
   };
 }
 
-export function defaultsForProject(projectId: string, name = ""): BrandKit {
+export function defaultsForProject(projectId: string, name = ""): BrandProfileForm {
   const site = websiteFromName(name);
   return {
-    ...emptyBrandKit(projectId),
+    ...emptyBrandProfileForm(projectId),
     voice: "Warm, expert, and IRDAI-safe. Speak like a trusted advisor.",
     audience: "25–40 year old salaried professionals in Pune",
     language: "English + Marathi mix",
@@ -125,11 +125,11 @@ export function defaultsForProject(projectId: string, name = ""): BrandKit {
   };
 }
 
-export function getBrandKit(projectId: string, projectName = "", live = false): BrandKit {
-  const found = readKits().find((kit) => kit.projectId === projectId);
+export function getBrandProfileForm(projectId: string, projectName = "", live = false): BrandProfileForm {
+  const found = readForms().find((form) => form.projectId === projectId);
   if (live) {
     return {
-      ...emptyBrandKit(projectId),
+      ...emptyBrandProfileForm(projectId),
       projectId,
       productLines: found?.productLines ?? [],
     };
@@ -143,43 +143,43 @@ export function getBrandKit(projectId: string, projectName = "", live = false): 
   };
 }
 
-export function liveKitFromProfile(projectId: string, profile: BrandProfile | null): BrandKit {
-  if (!profile) return getBrandKit(projectId, "", true);
-  return { ...profileToKit(profile, emptyBrandKit(projectId)), projectId };
+export function liveFormFromProfile(projectId: string, profile: BrandProfile | null): BrandProfileForm {
+  if (!profile) return getBrandProfileForm(projectId, "", true);
+  return { ...profileToForm(profile, emptyBrandProfileForm(projectId)), projectId };
 }
 
-export function getBrandProfileSaveErrors(kit: BrandKit, projectName: string): string[] {
+export function getBrandProfileSaveErrors(form: BrandProfileForm, projectName: string): string[] {
   const errors: string[] = [];
   if (!projectName.trim()) errors.push("Project name is required.");
-  if (!kit.audience.trim()) errors.push("Primary audience is required.");
-  if (splitKitList(kit.language).length === 0) errors.push("Add at least one language.");
-  if (splitKitList(kit.traits).length + splitKitList(kit.tone).length === 0) {
+  if (!form.audience.trim()) errors.push("Primary audience is required.");
+  if (splitProfileList(form.language).length === 0) errors.push("Add at least one language.");
+  if (splitProfileList(form.traits).length + splitProfileList(form.tone).length === 0) {
     errors.push("Add a tone or at least one trait.");
   }
   return errors;
 }
 
-export function getBrandKitScore(kit: BrandKit) {
-  const filled = REQUIRED_FIELDS.filter((key) => String(kit[key] ?? "").trim().length > 0).length;
+export function getBrandProfileScore(form: BrandProfileForm) {
+  const filled = REQUIRED_FIELDS.filter((key) => String(form[key] ?? "").trim().length > 0).length;
   return Math.round((filled / REQUIRED_FIELDS.length) * 100);
 }
 
-export function getBrandKitAssetCount(kit: BrandKit) {
-  return splitKitList(kit.pillars).length + splitKitList(kit.domains).length + splitKitList(kit.products).length;
+export function getBrandProfileAssetCount(form: BrandProfileForm) {
+  return splitProfileList(form.pillars).length + splitProfileList(form.domains).length + splitProfileList(form.products).length;
 }
 
-export function splitKitList(value: string) {
+export function splitProfileList(value: string) {
   return value
     .split(/[,•\n]/)
     .map((item) => item.trim())
     .filter(Boolean);
 }
 
-export function joinKitList(items: string[]) {
+export function joinProfileList(items: string[]) {
   return items.filter(Boolean).join(", ");
 }
 
-export function slugKitValue(value: string) {
+export function slugProfileValue(value: string) {
   return (
     value
       .trim()
@@ -190,7 +190,7 @@ export function slugKitValue(value: string) {
   );
 }
 
-export function emptyProductLine(_index = 1): BrandKitProductLine {
+export function emptyProductLine(_index = 1): BrandProfileProductLine {
   return {
     id: "",
     label: "",
@@ -212,15 +212,15 @@ export function humanizeProductLine(value: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function productLineFromFields(id: string, label: string, partners = "", hooks = ""): BrandKitProductLine | null {
+function productLineFromFields(id: string, label: string, partners = "", hooks = ""): BrandProfileProductLine | null {
   const rawId = id.trim();
   const rawLabel = label.trim();
   const slugSource = !rawId || isPlaceholderLineId(rawId) ? rawLabel : rawId;
-  const apiId = slugSource && !isPlaceholderLineId(slugSource) ? slugKitValue(slugSource) : "";
+  const apiId = slugSource && !isPlaceholderLineId(slugSource) ? slugProfileValue(slugSource) : "";
   const display = (rawLabel && !isPlaceholderLineId(rawLabel) ? rawLabel : humanizeProductLine(rawId || apiId)) || apiId;
   if (!apiId && !display) return null;
   return {
-    id: apiId || slugKitValue(display),
+    id: apiId || slugProfileValue(display),
     label: display || apiId,
     partners,
     hooks,
@@ -229,7 +229,7 @@ function productLineFromFields(id: string, label: string, partners = "", hooks =
 
 const PRODUCT_LINE_META = new Set(["id", "label", "name", "title", "slug", "key", "partners", "hooks", "description", "sku"]);
 
-function productLinesFromRecord(raw: Record<string, unknown>): BrandKitProductLine[] {
+function productLinesFromRecord(raw: Record<string, unknown>): BrandProfileProductLine[] {
   const nestedKeys = Object.keys(raw).filter((key) => {
     if (PRODUCT_LINE_META.has(key)) return false;
     const value = raw[key];
@@ -261,7 +261,7 @@ function productLinesFromRecord(raw: Record<string, unknown>): BrandKitProductLi
   return line ? [line] : [];
 }
 
-export function normalizeProductLines(raw: unknown): BrandKitProductLine[] {
+export function normalizeProductLines(raw: unknown): BrandProfileProductLine[] {
   if (raw == null || raw === "") return [];
   if (typeof raw === "string") {
     const trimmed = raw.trim();
@@ -275,7 +275,7 @@ export function normalizeProductLines(raw: unknown): BrandKitProductLine[] {
     return trimmed
       .split(/\n/)
       .map((item) => productLineFromFields(item, item))
-      .filter((item): item is BrandKitProductLine => Boolean(item));
+      .filter((item): item is BrandProfileProductLine => Boolean(item));
   }
   if (Array.isArray(raw)) {
     return raw.flatMap((item) => {
@@ -295,47 +295,47 @@ export function normalizeProductLines(raw: unknown): BrandKitProductLine[] {
   return [];
 }
 
-export function productLineApiId(line: BrandKitProductLine): string {
+export function productLineApiId(line: BrandProfileProductLine): string {
   const id = line.id.trim();
   const label = line.label.trim();
   if (id && !isPlaceholderLineId(id)) return id;
-  if (label && !isPlaceholderLineId(label)) return slugKitValue(label);
+  if (label && !isPlaceholderLineId(label)) return slugProfileValue(label);
   return "";
 }
 
-export function productLineLabel(line: BrandKitProductLine): string {
+export function productLineLabel(line: BrandProfileProductLine): string {
   const label = line.label.trim();
   if (label && !isPlaceholderLineId(label)) return label;
   return humanizeProductLine(line.id) || humanizeProductLine(label) || "Product line";
 }
 
-export function creativeProductLineId(kit: BrandKit, projectName = ""): string | null {
-  for (const line of kit.productLines) {
+export function creativeProductLineId(form: BrandProfileForm, projectName = ""): string | null {
+  for (const line of form.productLines) {
     const id = productLineApiId(line);
     if (id) return id;
   }
-  const fallback = slugKitValue(projectName);
+  const fallback = slugProfileValue(projectName);
   return fallback === "general" ? null : fallback;
 }
 
-export function productLinesToText(lines: BrandKitProductLine[]) {
+export function productLinesToText(lines: BrandProfileProductLine[]) {
   return lines.map((line) => line.label.trim()).filter(Boolean).join("\n");
 }
 
-export function saveBrandKit(kit: BrandKit) {
-  const kits = readKits().filter((item) => item.projectId !== kit.projectId);
-  localStorage.setItem(KEY, JSON.stringify([...kits, kit]));
+export function saveBrandProfileForm(form: BrandProfileForm) {
+  const forms = readForms().filter((item) => item.projectId !== form.projectId);
+  localStorage.setItem(KEY, JSON.stringify([...forms, form]));
 }
 
-export function displayHost(kit: BrandKit) {
-  const fromUrl = kit.websiteUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
+export function displayHost(form: BrandProfileForm) {
+  const fromUrl = form.websiteUrl.replace(/^https?:\/\//, "").replace(/\/.*$/, "").trim();
   if (fromUrl) return fromUrl;
-  return splitKitList(kit.domains)[0] ?? "";
+  return splitProfileList(form.domains)[0] ?? "";
 }
 
 function asStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
-  if (typeof value === "string" && value.trim()) return splitKitList(value);
+  if (typeof value === "string" && value.trim()) return splitProfileList(value);
   return [];
 }
 
@@ -351,7 +351,7 @@ function readVisual(raw: BrandVisualIdentity | undefined) {
   };
 }
 
-export function profileToKit(profile: BrandProfile, fallback: BrandKit): BrandKit {
+export function profileToForm(profile: BrandProfile, fallback: BrandProfileForm): BrandProfileForm {
   const visual = readVisual(profile.visual_identity);
   const fonts = visual.typography.split(/[/|,]/).map((item) => item.trim()).filter(Boolean);
   const toneValues = asStringArray(profile.tone);
@@ -392,23 +392,23 @@ export function profileToKit(profile: BrandProfile, fallback: BrandKit): BrandKi
   };
 }
 
-function productLinesForWrite(kit: BrandKit) {
-  const mapped = (kit.productLines.length
-    ? kit.productLines
-    : kit.products.split("\n").map((label) => ({
-        id: slugKitValue(label),
+function productLinesForWrite(form: BrandProfileForm) {
+  const mapped = (form.productLines.length
+    ? form.productLines
+    : form.products.split("\n").map((label) => ({
+        id: slugProfileValue(label),
         label,
         partners: "",
         hooks: "",
       })))
     .map((line) => {
       const label = (line.label.trim() && !isPlaceholderLineId(line.label) ? line.label.trim() : "") || humanizeProductLine(line.id) || line.id.trim();
-      const id = productLineApiId({ ...line, label }) || slugKitValue(label);
+      const id = productLineApiId({ ...line, label }) || slugProfileValue(label);
       return {
         id,
         label: label || id,
-        partners: splitKitList(line.partners),
-        hooks: splitKitList(line.hooks),
+        partners: splitProfileList(line.partners),
+        hooks: splitProfileList(line.hooks),
       };
     })
     .filter((line) => line.label);
@@ -416,46 +416,46 @@ function productLinesForWrite(kit: BrandKit) {
   return mapped;
 }
 
-export function kitToProfileBody(kit: BrandKit, projectName: string): BrandProfileWrite {
-  const productLines = productLinesForWrite(kit);
+export function formToProfileBody(form: BrandProfileForm, projectName: string): BrandProfileWrite {
+  const productLines = productLinesForWrite(form);
 
   return {
     name: projectName.trim(),
-    category: (kit.category || projectName).trim() || "General",
-    market: (kit.market || kit.category || projectName).trim() || "General",
-    audience_primary: kit.audience.trim(),
-    audience_secondary: kit.audienceSecondary.trim(),
-    tone: [...splitKitList(kit.traits), ...splitKitList(kit.tone)],
-    languages: splitKitList(kit.language),
-    voice: kit.voice.trim(),
-    pillars: splitKitList(kit.pillars),
-    website_url: kit.websiteUrl.trim() || null,
-    domains: splitKitList(kit.domains),
-    knowledge_notes: kit.knowledgeNotes
+    category: (form.category || projectName).trim() || "General",
+    market: (form.market || form.category || projectName).trim() || "General",
+    audience_primary: form.audience.trim(),
+    audience_secondary: form.audienceSecondary.trim(),
+    tone: [...splitProfileList(form.traits), ...splitProfileList(form.tone)],
+    languages: splitProfileList(form.language),
+    voice: form.voice.trim(),
+    pillars: splitProfileList(form.pillars),
+    website_url: form.websiteUrl.trim() || null,
+    domains: splitProfileList(form.domains),
+    knowledge_notes: form.knowledgeNotes
       .split("\n")
       .map((item) => item.trim())
       .filter(Boolean),
-    knowledge_urls: splitKitList(kit.knowledgeUrls),
-    ai_instructions: kit.aiInstructions.trim(),
+    knowledge_urls: splitProfileList(form.knowledgeUrls),
+    ai_instructions: form.aiInstructions.trim(),
     visual_identity: {
-      palette: [kit.primaryColor, kit.secondaryColor].filter(Boolean),
-      heading_font: kit.headingFont.trim(),
-      body_font: kit.bodyFont.trim(),
-      style_keywords: splitKitList(kit.imageStyle),
-      avoid: splitKitList(kit.avoid),
+      palette: [form.primaryColor, form.secondaryColor].filter(Boolean),
+      heading_font: form.headingFont.trim(),
+      body_font: form.bodyFont.trim(),
+      style_keywords: splitProfileList(form.imageStyle),
+      avoid: splitProfileList(form.avoid),
     },
-    compliance_mandatory_disclaimer: kit.mandatoryDisclaimer || "",
-    compliance_secondary_disclaimers: splitKitList(kit.secondaryDisclaimers),
-    compliance_banned_claims: splitKitList(kit.bannedWords),
-    compliance_rules: kit.contentRules
+    compliance_mandatory_disclaimer: form.mandatoryDisclaimer || "",
+    compliance_secondary_disclaimers: splitProfileList(form.secondaryDisclaimers),
+    compliance_banned_claims: splitProfileList(form.bannedWords),
+    compliance_rules: form.contentRules
       .split("\n")
       .map((item) => item.trim())
       .filter(Boolean),
-    cta_bank: kit.ctaBank
+    cta_bank: form.ctaBank
       .split("\n")
       .map((item) => item.trim())
       .filter(Boolean),
-    hashtag_bank: splitKitList(kit.hashtagBank),
+    hashtag_bank: splitProfileList(form.hashtagBank),
     product_lines: productLines,
   };
 }
@@ -463,18 +463,18 @@ export function kitToProfileBody(kit: BrandKit, projectName: string): BrandProfi
 export async function ensureBrandProductLineForGenerate(projectId: string, projectName: string): Promise<string> {
   const profile = await getBrandProfile(projectId);
   if (!profile) {
-    throw new Error("Save this project's Brand Kit before generating content.");
+    throw new Error("Save this project's Brand Profile before generating content.");
   }
 
-  const kit = liveKitFromProfile(projectId, profile);
-  const existing = creativeProductLineId(kit, profile.name || projectName);
+  const form = liveFormFromProfile(projectId, profile);
+  const existing = creativeProductLineId(form, profile.name || projectName);
   if (existing) return existing;
 
   const name = (profile.name || projectName).trim() || "General";
   const next = {
-    ...kit,
-    productLines: [{ id: slugKitValue(name), label: name, partners: "", hooks: "" }],
+    ...form,
+    productLines: [{ id: slugProfileValue(name), label: name, partners: "", hooks: "" }],
   };
-  const saved = await saveBrandProfile(projectId, kitToProfileBody(next, name));
-  return creativeProductLineId(liveKitFromProfile(projectId, saved), name) ?? slugKitValue(name);
+  const saved = await saveBrandProfile(projectId, formToProfileBody(next, name));
+  return creativeProductLineId(liveFormFromProfile(projectId, saved), name) ?? slugProfileValue(name);
 }

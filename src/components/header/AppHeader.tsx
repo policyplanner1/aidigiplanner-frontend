@@ -1,7 +1,9 @@
-import { AccountCircle, ChevronRight, ExpandMore, Menu, NotificationsNone } from "@mui/icons-material";
+import { AccountCircle, AutoAwesome, ChevronRight, ExpandMore, Menu, NotificationsNone } from "@mui/icons-material";
 import {
   Avatar,
+  Badge,
   Box,
+  Button,
   Divider,
   IconButton,
   ListItemIcon,
@@ -14,13 +16,21 @@ import { useNavigate } from "react-router-dom";
 
 import { CHROME_BORDER, HEADER_HEIGHT, SURFACE } from "../../constants/layout";
 import { useAuth } from "../../hooks/useAuth";
+import { usePermissions } from "../../hooks/usePermissions";
 import { useWorkspace } from "../../hooks/useWorkspace";
+import { PERMISSIONS } from "../../permissions/permissions";
 import { ROLE_LABELS, accountDisplayName } from "../../permissions/roles";
+import { useNotificationStore } from "../../store/notificationStore";
 import { useUiStore } from "../../store/uiStore";
 
 export function AppHeader() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
+  const notifications = useNotificationStore((state) => state.notifications);
+  const markRead = useNotificationStore((state) => state.markRead);
+  const markAllRead = useNotificationStore((state) => state.markAllRead);
+  const unreadCount = notifications.filter((item) => !item.read).length;
   const {
     organization,
     projects,
@@ -128,14 +138,27 @@ export function AppHeader() {
         </Box>
       </Box>
 
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        {can(PERMISSIONS.CONTENT_CREATE) ? (
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AutoAwesome fontSize="small" />}
+            onClick={() => navigate("/app/create")}
+            sx={{ borderRadius: "999px", px: 1.75, display: { xs: "none", sm: "inline-flex" } }}
+          >
+            Create with AI
+          </Button>
+        ) : null}
         <IconButton
           onClick={openMenu(setNotificationAnchor)}
           aria-label="Notifications"
           size="small"
           sx={{ color: "text.secondary", borderRadius: "4px" }}
         >
-          <NotificationsNone fontSize="small" />
+          <Badge badgeContent={unreadCount} color="error" max={9}>
+            <NotificationsNone fontSize="small" />
+          </Badge>
         </IconButton>
         <Divider orientation="vertical" flexItem sx={{ mx: 1, my: 1.5 }} />
         <Box
@@ -228,9 +251,67 @@ export function AppHeader() {
         anchorEl={notificationAnchor}
         open={Boolean(notificationAnchor)}
         onClose={closeMenus}
-        slotProps={{ paper: { sx: { mt: 0.75 } } }}
+        slotProps={{ paper: { sx: { mt: 0.75, width: 340, maxHeight: 420 } } }}
       >
-        <MenuItem disabled>No notifications yet</MenuItem>
+        <Box sx={{ px: 1.5, py: 0.75, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <Typography sx={{ fontWeight: 700, fontSize: 13 }}>Notifications</Typography>
+          {notifications.length > 0 ? (
+            <Typography
+              component="button"
+              onClick={() => markAllRead()}
+              sx={{ border: 0, background: "none", cursor: "pointer", fontSize: 12, color: "secondary.dark", fontWeight: 600 }}
+            >
+              Mark all read
+            </Typography>
+          ) : null}
+        </Box>
+        <Divider />
+        {notifications.length === 0 ? (
+          <MenuItem disabled>No notifications yet</MenuItem>
+        ) : (
+          notifications.slice(0, 8).map((item) => (
+            <MenuItem
+              key={item.id}
+              onClick={() => {
+                markRead(item.id);
+                closeMenus();
+                if (item.path) navigate(item.path);
+              }}
+              sx={{ whiteSpace: "normal", alignItems: "flex-start", py: 1 }}
+            >
+              <Box sx={{ display: "flex", gap: 0.75, alignItems: "flex-start" }}>
+                <Box
+                  sx={{
+                    width: 6,
+                    height: 6,
+                    mt: 0.6,
+                    borderRadius: "50%",
+                    backgroundColor: item.read ? "transparent" : "#FF6B45",
+                    flexShrink: 0,
+                  }}
+                />
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography sx={{ fontWeight: item.read ? 500 : 700, fontSize: 13 }}>{item.title}</Typography>
+                  {item.detail ? (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block" }}>
+                      {item.detail}
+                    </Typography>
+                  ) : null}
+                </Box>
+              </Box>
+            </MenuItem>
+          ))
+        )}
+        <Divider />
+        <MenuItem
+          onClick={() => {
+            closeMenus();
+            navigate("/app/notifications");
+          }}
+          sx={{ justifyContent: "center", fontSize: 12.5, fontWeight: 600, color: "secondary.dark" }}
+        >
+          View all notifications
+        </MenuItem>
       </MuiMenu>
 
       <MuiMenu

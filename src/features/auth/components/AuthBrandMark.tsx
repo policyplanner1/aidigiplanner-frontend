@@ -61,7 +61,7 @@ export function AuthBrandMark({ size = "default" }: AuthBrandMarkProps) {
               WebkitTextFillColor: "transparent",
             }}
           >
-            Digi
+            Social
           </Box>{" "}
           Planner
         </Typography>

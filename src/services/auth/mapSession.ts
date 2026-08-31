@@ -57,12 +57,18 @@ function mapRole(me: ApiMeResponse): RoleName {
   if (me.user?.is_super_admin) return "SUPER_ADMIN";
 
   const company = me.companies[0];
-  if (company?.role === "company_admin") return "ADMIN";
+  if (company?.role === "company_admin") return "COMPANY_ADMIN";
 
+  // Real product-invite roles (app.models.enums.ProductInviteRole on the backend:
+  // creator/approver/publisher/analyst/product_manager) map 1:1 onto the spec's
+  // role names. "project_admin" is a legacy alias for product_manager.
   const projectRoles = me.projects.map((item) => item.role);
-  if (projectRoles.includes("project_admin") || projectRoles.includes("product_manager")) return "SOCIAL_MANAGER";
-  if (projectRoles.includes("editor") || projectRoles.includes("creator")) return "CONTENT_MANAGER";
-  return "USER";
+  if (projectRoles.includes("product_manager") || projectRoles.includes("project_admin")) return "PRODUCT_MANAGER";
+  if (projectRoles.includes("approver")) return "APPROVER";
+  if (projectRoles.includes("publisher")) return "PUBLISHER";
+  if (projectRoles.includes("analyst")) return "ANALYST";
+  if (projectRoles.includes("creator") || projectRoles.includes("editor")) return "CONTENT_CREATOR";
+  return "CONTENT_CREATOR";
 }
 
 export function mapMeToSession(raw: unknown): AuthSession {
@@ -142,10 +148,31 @@ export function mapAccessProjects(raw: unknown): Project[] {
     }));
 }
 
+// Per spec §7/§19-27: Company Admins are the only role that goes through
+// onboarding (invited members never do — §27). Once onboarding is complete,
+// OnboardingGuard bounces a Company Admin straight to their role destination
+// below instead of /app/dashboard, so this stays in sync with that redirect.
+export function roleHomePath(session: AuthSession): string {
+  switch (session.user.role) {
+    case "APPROVER":
+      return "/app/approvals";
+    case "PUBLISHER":
+      return "/app/calendar";
+    case "PRODUCT_MANAGER":
+    case "CONTENT_CREATOR":
+    case "ANALYST":
+    default:
+      return "/app/dashboard";
+  }
+}
+
 export function postAuthPath(session: AuthSession): string {
   if (session.user.role === "SUPER_ADMIN") return "/super-admin";
   if (session.companyStatus && session.companyStatus !== "active") {
     return "/pending";
+  }
+  if (session.user.role !== "COMPANY_ADMIN") {
+    return roleHomePath(session);
   }
   return "/onboarding";
 }

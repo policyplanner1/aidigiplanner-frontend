@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Link, Typography } from "@mui/material";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
 
 import { TYPE } from "../../../constants/fonts";
@@ -21,6 +21,16 @@ export function VerifyEmailPage() {
   const [info, setInfo] = useState<string | null>(null);
   const verifying = useRef(false);
   const { login } = useAuth();
+  const RESEND_COOLDOWN_SECONDS = 45;
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((current) => Math.max(0, current - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown]);
 
   const verify = async (code = otp) => {
     if (code.length !== 6 || verifying.current) {
@@ -59,13 +69,14 @@ export function VerifyEmailPage() {
   };
 
   const resend = async () => {
-    if (!email) return;
+    if (!email || resendCooldown > 0) return;
     setBusy(true);
     setError(null);
     setInfo(null);
     try {
       await authApi.resendVerification(email);
       setInfo("A new code was sent.");
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
       setError(getApiErrorMessage(err));
     } finally {
@@ -114,14 +125,19 @@ export function VerifyEmailPage() {
         {busy ? "Verifying..." : "Verify and Continue"}
       </Button>
 
-      <Button fullWidth sx={{ mt: 1.25 }} disabled={busy || !email} onClick={() => void resend()}>
-        Resend Code
+      <Button
+        fullWidth
+        sx={{ mt: 1.25 }}
+        disabled={busy || !email || resendCooldown > 0}
+        onClick={() => void resend()}
+      >
+        {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend Code"}
       </Button>
 
       <Typography sx={{ mt: 2 }} color="text.secondary">
         Wrong email?{" "}
-        <Link component={RouterLink} to="/signup">
-          Create account
+        <Link component={RouterLink} to="/register">
+          Change email
         </Link>
       </Typography>
     </Box>

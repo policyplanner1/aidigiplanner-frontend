@@ -97,13 +97,16 @@ export type ApiCompanyMember = {
   projects?: string[] | null;
 };
 
-export type ApiProjectRole = "project_admin" | "editor" | "viewer";
+// The real, live product-member role (app.models.enums.ProductRole on the
+// backend) — matches ProductInviteRole in types/onboarding.ts exactly.
+export type ApiProductMemberRole = "creator" | "approver" | "publisher" | "analyst" | "product_manager";
 
-export type ApiProjectMember = {
+export type ApiProductMember = {
   id: string;
-  project_id: string;
+  product_id: string;
   user_id: string;
-  role: ApiProjectRole;
+  role: ApiProductMemberRole;
+  sub_product_ids: string[];
   added_by: string;
   created_at: string;
   user_email: string;

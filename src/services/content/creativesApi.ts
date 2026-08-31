@@ -2,7 +2,7 @@ import { apiClient } from "../api/client";
 import { productFirst } from "../api/productFirst";
 import type { ContentFormatId } from "../../constants/contentFormats";
 
-export type CreativeFormat = "post" | "carousel" | "reel";
+export type CreativeFormat = "post" | "carousel" | "reel" | "story" | "video";
 export type CreativeLanguage = "en" | "hi" | "hinglish";
 export type CreativeQuality = "draft" | "standard" | "hero";
 export type ReelStyle = "story" | "avatar";
@@ -45,6 +45,14 @@ export type CreativeAsset = {
   generated_at: string;
 };
 
+export type ContentComment = {
+  id: string;
+  concept_id: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+};
+
 export type CreativeConceptStatus =
   | "draft"
   | "in_review"
@@ -75,6 +83,7 @@ export type CreativeConcept = {
   status?: CreativeConceptStatus | string;
   scheduled_at?: string | null;
   published_at?: string | null;
+  suggested_posting_time?: string | null;
 };
 
 export type GenerateCreativesRequest = {
@@ -120,7 +129,9 @@ export function toApiPlatform(label: string) {
 
 export function toCreativeFormat(format: ContentFormatId): CreativeFormat {
   if (format === "carousel") return "carousel";
-  if (format === "reel" || format === "short" || format === "story" || format === "video") return "reel";
+  if (format === "reel") return "reel";
+  if (format === "story") return "story";
+  if (format === "video" || format === "short") return "video";
   return "post";
 }
 
@@ -213,6 +224,10 @@ export async function listCreativeConcepts(projectId: string, jobId?: string, st
   return productFirst<CreativeConcept[]>(projectId, "/creatives", (path) => apiClient.get(path, { params }));
 }
 
+export async function getCreativeConcept(projectId: string, conceptId: string) {
+  return productFirst<CreativeConcept>(projectId, `/creatives/concepts/${conceptId}`, (path) => apiClient.get(path));
+}
+
 export async function downloadCreativeAsset(projectId: string, assetId: string) {
   const response = await productFirst<Blob>(projectId, `/creatives/assets/${assetId}/download`, (path) =>
     apiClient.get(path, { responseType: "blob" }),
@@ -234,9 +249,14 @@ export function rejectConcept(productId: string, conceptId: string, reason: stri
   );
 }
 
-export function scheduleConcept(productId: string, conceptId: string, scheduled_at: string) {
+export function scheduleConcept(
+  productId: string,
+  conceptId: string,
+  options: string | { scheduled_at?: string; use_suggested_time?: boolean },
+) {
+  const body = typeof options === "string" ? { scheduled_at: options } : options;
   return productFirst(productId, `/creatives/concepts/${conceptId}/schedule`, (path) =>
-    apiClient.post(path, { scheduled_at }),
+    apiClient.post(path, body),
   );
 }
 
@@ -251,11 +271,13 @@ export function approveAndPublishConcept(productId: string, conceptId: string) {
 }
 
 export function listConceptComments(productId: string, conceptId: string) {
-  return productFirst(productId, `/creatives/concepts/${conceptId}/comments`, (path) => apiClient.get(path));
+  return productFirst<ContentComment[]>(productId, `/creatives/concepts/${conceptId}/comments`, (path) =>
+    apiClient.get(path),
+  );
 }
 
 export function addConceptComment(productId: string, conceptId: string, body: string) {
-  return productFirst(productId, `/creatives/concepts/${conceptId}/comments`, (path) =>
+  return productFirst<ContentComment>(productId, `/creatives/concepts/${conceptId}/comments`, (path) =>
     apiClient.post(path, { body }),
   );
 }
@@ -300,6 +322,7 @@ export async function runCreativeGeneration(
     ctaOverride?: string;
     reelStyle?: ReelStyle;
     voiceover?: VoiceoverMode;
+    reelDurationS?: number;
     dryRun?: boolean;
   },
   onJob?: (job: GenerationJob) => void,
@@ -312,7 +335,7 @@ export async function runCreativeGeneration(
   const rawLine = input.productLine.trim();
   const productLine = /[^a-zA-Z0-9_-]/.test(rawLine) ? slugProductLine(rawLine) : rawLine.slice(0, 100);
   if (!productLine) {
-    throw new Error("This brand kit needs a product line before generating.");
+    throw new Error("This brand profile needs a product line before generating.");
   }
 
   const format = toCreativeFormat(input.format);
@@ -337,7 +360,7 @@ export async function runCreativeGeneration(
   };
   if (format === "carousel") body.carousel_slides = 5;
   if (format === "reel") {
-    body.reel_duration_s = 15;
+    body.reel_duration_s = input.reelDurationS ?? 15;
     body.reel_style = input.reelStyle ?? "story";
     body.voiceover = input.voiceover ?? "silent_text";
   }

@@ -13,6 +13,7 @@ import {
   Typography,
 } from "@mui/material";
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { AnimatedCount } from "../../../components/ui/AnimatedCount";
 import { PageHeader } from "../../../components/ui/PageHeader";
@@ -68,6 +69,7 @@ function formatWhen(value: string | null) {
 }
 
 export function OrganizationsPage() {
+  const navigate = useNavigate();
   const live = isLiveAuth();
   const [status, setStatus] = useState<CompanyStatusFilter>("pending_approval");
   const [rejecting, setRejecting] = useState<ApiCompanySummary | null>(null);
@@ -232,7 +234,12 @@ export function OrganizationsPage() {
                 const rowBusy = busyId === company.id;
 
                 return (
-                  <TableRow key={company.id} hover>
+                  <TableRow
+                    key={company.id}
+                    hover
+                    onClick={() => navigate(`/super-admin/companies/${company.id}`)}
+                    sx={{ cursor: "pointer" }}
+                  >
                     <TableCell>
                       <Typography sx={{ fontWeight: 700 }}>{company.name}</Typography>
                       <Typography variant="body2" color="text.secondary">
@@ -250,7 +257,7 @@ export function OrganizationsPage() {
                     <TableCell>
                       {formatWhen(company.approved_at ?? company.rejected_at)}
                     </TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" onClick={(event) => event.stopPropagation()}>
                       {pending ? (
                         <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1 }}>
                           <Button

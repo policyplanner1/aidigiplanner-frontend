@@ -13,7 +13,7 @@ import { usePermissions } from "../../../hooks/usePermissions";
 import { useWorkspace } from "../../../hooks/useWorkspace";
 import { PERMISSIONS } from "../../../permissions/permissions";
 import { getApiErrorMessage } from "../../../services/api/errors";
-import { emptyBrandKit, getBrandKit, getBrandKitScore, type BrandKit } from "../../../services/brand/brandKitService";
+import { emptyBrandProfileForm, getBrandProfileForm, getBrandProfileScore, type BrandProfileForm } from "../../../services/brand/brandProfileService";
 import { createProject, getSocialAccounts } from "../../../services/projects/projectService";
 import { AddProjectDialog } from "../../projects/components/AddProjectDialog";
 import {
@@ -22,7 +22,7 @@ import {
 } from "../../projects/hooks/useCompanyProjects";
 import type { ProjectFormValues } from "../../projects/schemas/projectSchema";
 import { BrandProjectCard } from "../components/BrandProjectCard";
-import { useBrandKits } from "../hooks/useBrandProfile";
+import { useBrandProfiles } from "../hooks/useBrandProfile";
 
 const statusFilters = [
   { id: "all", label: "All" },
@@ -30,7 +30,7 @@ const statusFilters = [
   { id: "inactive", label: "Inactive" },
 ] as const;
 
-export function BrandKitPage() {
+export function BrandProfilePage() {
   const navigate = useNavigate();
   const { session } = useAuth();
   const { can } = usePermissions();
@@ -39,37 +39,37 @@ export function BrandKitPage() {
   const [status, setStatus] = useState<(typeof statusFilters)[number]["id"]>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const canManage = can(PERMISSIONS.BRANDS_MANAGE);
+  const canManage = can(PERMISSIONS.PRODUCT_CREATE);
   const live = session?.source === "api";
   const listed = useCompanyProjects(organization?.id, live);
   const createLiveProject = useCreateCompanyProject(organization?.id ?? "");
   const projects = live ? (listed.data ?? workspaceProjects) : workspaceProjects;
-  const liveKits = useBrandKits(
+  const liveProfiles = useBrandProfiles(
     projects.map((project) => ({ id: project.id, name: project.name })),
     live,
   );
 
-  const kitByProject = useMemo(() => {
-    const map = new Map<string, BrandKit>();
+  const profileByProject = useMemo(() => {
+    const map = new Map<string, BrandProfileForm>();
     projects.forEach((project, index) => {
-      map.set(project.id, liveKits[index]?.data ?? (live ? emptyBrandKit(project.id) : getBrandKit(project.id, project.name)));
+      map.set(project.id, liveProfiles[index]?.data ?? (live ? emptyBrandProfileForm(project.id) : getBrandProfileForm(project.id, project.name)));
     });
     return map;
-  }, [liveKits, projects]);
+  }, [liveProfiles, projects]);
 
   const visible = useMemo(() => {
     return projects.filter((project) => {
-      const kit = kitByProject.get(project.id) ?? (live ? emptyBrandKit(project.id) : getBrandKit(project.id, project.name));
-      const haystack = `${project.name} ${project.industry} ${project.description} ${kit.websiteUrl} ${kit.domains}`.toLowerCase();
+      const profile = profileByProject.get(project.id) ?? (live ? emptyBrandProfileForm(project.id) : getBrandProfileForm(project.id, project.name));
+      const haystack = `${project.name} ${project.industry} ${project.description} ${profile.websiteUrl} ${profile.domains}`.toLowerCase();
       const matchesQuery = haystack.includes(query.trim().toLowerCase());
       const matchesStatus = status === "all" || project.status === status;
       return matchesQuery && matchesStatus;
     });
-  }, [kitByProject, live, projects, query, status]);
+  }, [profileByProject, live, projects, query, status]);
 
-  const openKit = (projectId: string) => {
+  const openProfile = (projectId: string) => {
     setCurrentProjectId(projectId);
-    navigate(`/app/brand-kit/${projectId}`);
+    navigate(`/app/brand-profile/${projectId}`);
   };
 
   const handleCreate = async (values: ProjectFormValues) => {
@@ -83,7 +83,7 @@ export function BrandKitPage() {
           description: values.description?.trim() || null,
         });
         setDialogOpen(false);
-        openKit(created.id);
+        openProfile(created.id);
       } catch (error) {
         setCreateError(getApiErrorMessage(error));
       }
@@ -103,7 +103,7 @@ export function BrandKitPage() {
       },
     });
     setDialogOpen(false);
-    openKit(project.id);
+    openProfile(project.id);
   };
 
   return (
@@ -112,8 +112,8 @@ export function BrandKitPage() {
         {createError && !dialogOpen ? <Alert severity="error">{createError}</Alert> : null}
         <PageHeader
           eyebrow={`${organization?.name ?? "Organization"} · Brand board`}
-          title="Brand Kit"
-          description="Manage your brands, projects, and marketing identity. Each kit stays inside its own project so voices never mix."
+          title="Brand Profile"
+          description="Manage your brands, projects, and marketing identity. Each profile stays inside its own project so voices never mix."
           action={
             canManage ? (
               <Button variant="contained" startIcon={<Add />} onClick={() => setDialogOpen(true)}>
@@ -124,7 +124,7 @@ export function BrandKitPage() {
           stats={[
             { label: "Projects", value: projects.length },
             { label: "Active", value: projects.filter((item) => item.status === "active").length },
-            { label: "Kits ready", value: projects.filter((item) => getBrandKitScore(kitByProject.get(item.id) ?? (live ? emptyBrandKit(item.id) : getBrandKit(item.id, item.name))) === 100).length },
+            { label: "Profiles ready", value: projects.filter((item) => getBrandProfileScore(profileByProject.get(item.id) ?? (live ? emptyBrandProfileForm(item.id) : getBrandProfileForm(item.id, item.name))) === 100).length },
           ]}
         />
 
@@ -159,7 +159,7 @@ export function BrandKitPage() {
             <Typography sx={{ fontWeight: 700 }}>No projects match</Typography>
             <Typography color="text.secondary" sx={{ mt: 0.5 }}>
               {projects.length === 0
-                ? "Create a project first. Each one gets its own brand kit, domain, and social accounts."
+                ? "Create a project first. Each one gets its own brand profile, domain, and social accounts."
                 : "Try another search or status."}
             </Typography>
           </Box>
@@ -172,15 +172,15 @@ export function BrandKitPage() {
             }}
           >
             {visible.map((project) => {
-              const kit = kitByProject.get(project.id) ?? (live ? emptyBrandKit(project.id) : getBrandKit(project.id, project.name));
+              const profile = profileByProject.get(project.id) ?? (live ? emptyBrandProfileForm(project.id) : getBrandProfileForm(project.id, project.name));
               return (
                 <BrandProjectCard
                   key={project.id}
                   project={project}
-                  kit={kit}
+                  profile={profile}
                   accounts={getSocialAccounts(project.id)}
-                  score={getBrandKitScore(kit)}
-                  onManage={() => openKit(project.id)}
+                  score={getBrandProfileScore(profile)}
+                  onManage={() => openProfile(project.id)}
                 />
               );
             })}

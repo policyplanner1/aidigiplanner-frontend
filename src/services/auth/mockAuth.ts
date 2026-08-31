@@ -1,7 +1,6 @@
 import type {
   AuthSession,
   ProductModuleAccess,
-  RoleName,
   User,
 } from "../../types/auth";
 import type { Organization, Project } from "../../types/organization";
@@ -10,7 +9,7 @@ import {
   getPermissionsForRole,
 } from "../../permissions/roles";
 import {
-  createProject,
+  // createProject, // only used by the disabled signupOrganization() below
   DEMO_PROJECTS,
   getProjectsForSession,
   seedProjects,
@@ -45,7 +44,7 @@ export function normalizeAccount(account: StoredAccount): StoredAccount {
     account.productAccess && account.productAccess.length > 0
       ? account.productAccess
       : account.assignedBrandIds.map((projectId) =>
-          defaultProductAccess(projectId, account.user.role === "ADMIN"),
+          defaultProductAccess(projectId, account.user.role === "COMPANY_ADMIN"),
         );
 
   return {
@@ -87,7 +86,7 @@ export const DEMO_ACCOUNTS: StoredAccount[] = [
       id: "user_prakash",
       name: "Prakash Patil",
       email: "prakash@gmail.com",
-      role: "ADMIN",
+      role: "COMPANY_ADMIN",
       organizationId: DEMO_ORGANIZATION.id,
       status: "active",
     },
@@ -109,7 +108,7 @@ export const DEMO_ACCOUNTS: StoredAccount[] = [
       id: "user_amit",
       name: "Amit Patel",
       email: "uma.s@example.org",
-      role: "SOCIAL_MANAGER",
+      role: "PRODUCT_MANAGER",
       organizationId: DEMO_ORGANIZATION.id,
       status: "active",
     },
@@ -176,94 +175,97 @@ export function buildSession(
     organizationId: normalized.user.organizationId,
     assignedBrandIds: normalized.assignedBrandIds,
     permissions:
-      normalized.user.role === "ADMIN" || normalized.user.role === "SUPER_ADMIN"
+      normalized.user.role === "COMPANY_ADMIN" || normalized.user.role === "SUPER_ADMIN"
         ? getPermissionsForRole(normalized.user.role)
         : getPermissionsForProductAccess(normalized.user.role, access),
   };
 }
 
-export function loginWithPassword(email: string, password: string): AuthSession {
-  seedDemoData();
-
-  const account = getAccounts().find(
-    (item) => item.user.email.toLowerCase() === email.trim().toLowerCase(),
-  );
-
-  if (!account || account.password !== password) {
-    throw new Error("Invalid email or password.");
-  }
-
-  if (account.user.status !== "active") {
-    throw new Error("This account is not active.");
-  }
-
-  return buildSession(account, account.assignedBrandIds[0] ?? null);
-}
-
-export function signupOrganization(input: {
-  companyName: string;
-  name: string;
-  email: string;
-  password: string;
-}): AuthSession {
-  seedDemoData();
-
-  const accounts = getAccounts();
-  const email = input.email.trim().toLowerCase();
-
-  if (accounts.some((account) => account.user.email.toLowerCase() === email)) {
-    throw new Error("An account with this email already exists.");
-  }
-
-  const organizationId = `org_${crypto.randomUUID()}`;
-  const slug = input.companyName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-
-  const organization: Organization = {
-    id: organizationId,
-    name: input.companyName.trim(),
-    slug: slug || organizationId,
-    plan: "Starter",
-    status: "active",
-  };
-
-  const project = createProject({
-    organizationId,
-    name: input.companyName.trim(),
-    description: "Primary project",
-    industry: "General",
-    modules: {
-      social: true,
-      marketing: true,
-      leads: true,
-      crm: true,
-    },
-  });
-
-  const user: User = {
-    id: `user_${crypto.randomUUID()}`,
-    name: input.name.trim(),
-    email,
-    role: "ADMIN" satisfies RoleName,
-    organizationId,
-    status: "active",
-  };
-
-  const account: StoredAccount = {
-    user,
-    password: input.password,
-    assignedBrandIds: [project.id],
-    productAccess: [defaultProductAccess(project.id, true)],
-  };
-
-  writeJson(ACCOUNTS_KEY, [...accounts, account]);
-  writeJson(ORGANIZATIONS_KEY, [...getOrganizations(), organization]);
-
-  return buildSession(account, project.id);
-}
+// Mock login/signup are disabled — the app always authenticates against the real
+// aidigiplanner-backend API now (see hooks/useAuth.ts). Kept here for reference only.
+//
+// export function loginWithPassword(email: string, password: string): AuthSession {
+//   seedDemoData();
+//
+//   const account = getAccounts().find(
+//     (item) => item.user.email.toLowerCase() === email.trim().toLowerCase(),
+//   );
+//
+//   if (!account || account.password !== password) {
+//     throw new Error("Invalid email or password.");
+//   }
+//
+//   if (account.user.status !== "active") {
+//     throw new Error("This account is not active.");
+//   }
+//
+//   return buildSession(account, account.assignedBrandIds[0] ?? null);
+// }
+//
+// export function signupOrganization(input: {
+//   companyName: string;
+//   name: string;
+//   email: string;
+//   password: string;
+// }): AuthSession {
+//   seedDemoData();
+//
+//   const accounts = getAccounts();
+//   const email = input.email.trim().toLowerCase();
+//
+//   if (accounts.some((account) => account.user.email.toLowerCase() === email)) {
+//     throw new Error("An account with this email already exists.");
+//   }
+//
+//   const organizationId = `org_${crypto.randomUUID()}`;
+//   const slug = input.companyName
+//     .trim()
+//     .toLowerCase()
+//     .replace(/[^a-z0-9]+/g, "-")
+//     .replace(/^-|-$/g, "");
+//
+//   const organization: Organization = {
+//     id: organizationId,
+//     name: input.companyName.trim(),
+//     slug: slug || organizationId,
+//     plan: "Starter",
+//     status: "active",
+//   };
+//
+//   const project = createProject({
+//     organizationId,
+//     name: input.companyName.trim(),
+//     description: "Primary project",
+//     industry: "General",
+//     modules: {
+//       social: true,
+//       marketing: true,
+//       leads: true,
+//       crm: true,
+//     },
+//   });
+//
+//   const user: User = {
+//     id: `user_${crypto.randomUUID()}`,
+//     name: input.name.trim(),
+//     email,
+//     role: "ADMIN" satisfies RoleName,
+//     organizationId,
+//     status: "active",
+//   };
+//
+//   const account: StoredAccount = {
+//     user,
+//     password: input.password,
+//     assignedBrandIds: [project.id],
+//     productAccess: [defaultProductAccess(project.id, true)],
+//   };
+//
+//   writeJson(ACCOUNTS_KEY, [...accounts, account]);
+//   writeJson(ORGANIZATIONS_KEY, [...getOrganizations(), organization]);
+//
+//   return buildSession(account, project.id);
+// }
 
 export function getOrganizationById(id: string | null): Organization | null {
   if (!id) return null;

@@ -46,7 +46,7 @@ export function ProjectsPage() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Project | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const canManage = can(PERMISSIONS.BRANDS_MANAGE);
+  const canManage = can(PERMISSIONS.PRODUCT_CREATE);
   const live = session?.source === "api";
   const listed = useCompanyProjects(organization?.id, live);
   const createLiveProject = useCreateCompanyProject(organization?.id ?? "");
@@ -88,7 +88,7 @@ export function ProjectsPage() {
           description: values.description?.trim() || null,
         });
         setDialogOpen(false);
-        navigate(`/app/projects/${created.id}`);
+        navigate(`/app/products/${created.id}`);
       } catch (error) {
         setCreateError(getApiErrorMessage(error));
       }
@@ -110,12 +110,12 @@ export function ProjectsPage() {
 
     setCurrentProjectId(project.id);
     setDialogOpen(false);
-    navigate(`/app/projects/${project.id}`);
+    navigate(`/app/products/${project.id}`);
   };
 
   const openProject = (projectId: string) => {
     setCurrentProjectId(projectId);
-    navigate(`/app/projects/${projectId}`);
+    navigate(`/app/products/${projectId}`);
   };
 
   const handleDelete = async () => {
@@ -151,7 +151,7 @@ export function ProjectsPage() {
         eyebrow={`${organization?.name ?? "Organization"} · Gallery`}
         title="Projects"
         description={
-          user?.role === "ADMIN"
+          user?.role === "COMPANY_ADMIN"
             ? "A board of brand workspaces. Each one keeps social, content, leads, and CRM separate."
             : "Projects assigned to you. Open one to work inside that brand only."
         }

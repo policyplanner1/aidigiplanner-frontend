@@ -47,4 +47,4 @@ export function providerForPlatform(
   return null;
 }
 
-export const OAUTH_RETURN_PATH = "/app/social/oauth/callback";
+export const OAUTH_RETURN_PATH = "/app/social-accounts/oauth/callback";

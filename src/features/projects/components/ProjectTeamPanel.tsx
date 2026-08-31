@@ -22,8 +22,7 @@ import { useState } from "react";
 
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { getApiErrorMessage } from "../../../services/api/errors";
-import { listTeamMembers } from "../../../services/team/teamService";
-import type { ApiProjectMember, ApiProjectRole } from "../../../types/api";
+import type { ApiProductMemberRole } from "../../../types/api";
 import {
   useAddProjectMember,
   useCompanyMemberOptions,
@@ -31,11 +30,15 @@ import {
   useRemoveProjectMember,
 } from "../hooks/useProjectMembers";
 
-const ROLE_LABELS: Record<ApiProjectRole, string> = {
-  project_admin: "Project admin",
-  editor: "Editor",
-  viewer: "Viewer",
+const PRODUCT_ROLE_LABELS: Record<ApiProductMemberRole, string> = {
+  product_manager: "Product Manager",
+  creator: "Content Creator",
+  approver: "Approver",
+  publisher: "Publisher",
+  analyst: "Analyst",
 };
+
+const PRODUCT_ROLES = Object.keys(PRODUCT_ROLE_LABELS) as ApiProductMemberRole[];
 
 type ProjectTeamPanelProps = {
   projectId: string;
@@ -56,13 +59,13 @@ export function ProjectTeamPanel({
   const removeMember = useRemoveProjectMember(projectId, companyId ?? undefined);
 
   const [open, setOpen] = useState(false);
-  const [removing, setRemoving] = useState<ApiProjectMember | null>(null);
+  const [removing, setRemoving] = useState<{ id: string; user_full_name: string; user_email: string } | null>(null);
   const [userId, setUserId] = useState("");
-  const [role, setRole] = useState<ApiProjectRole>("editor");
+  const [role, setRole] = useState<ApiProductMemberRole>("creator");
   const [banner, setBanner] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const rows = live ? (members.data ?? []) : mockRows(companyId, projectId);
+  const rows = members.data ?? [];
   const assignedUserIds = new Set(rows.map((row) => row.user_id));
   const available = (companyMembers.data ?? []).filter(
     (member) => !assignedUserIds.has(member.user_id),
@@ -74,10 +77,10 @@ export function ProjectTeamPanel({
     try {
       await addMember.mutateAsync({ user_id: userId, role });
       const picked = available.find((member) => member.user_id === userId);
-      setBanner(`${picked?.user_full_name || "Teammate"} was added to this project.`);
+      setBanner(`${picked?.user_full_name || "Teammate"} was added to this product.`);
       setOpen(false);
       setUserId("");
-      setRole("editor");
+      setRole("creator");
     } catch (err) {
       setError(getApiErrorMessage(err));
     }
@@ -88,7 +91,7 @@ export function ProjectTeamPanel({
     setError(null);
     try {
       await removeMember.mutateAsync(removing.id);
-      setBanner(`${removing.user_full_name || removing.user_email} was removed from this project.`);
+      setBanner(`${removing.user_full_name || removing.user_email} was removed from this product.`);
       setRemoving(null);
     } catch (err) {
       setError(getApiErrorMessage(err));
@@ -98,11 +101,11 @@ export function ProjectTeamPanel({
   return (
     <Box sx={{ display: "grid", gap: 2 }}>
       <PageHeader
-        eyebrow="Project access"
-        title="Project team"
-        description="People who can work in this workspace. Add them from the company team."
+        eyebrow="Product access"
+        title="Product team"
+        description="People who can work in this product. Add them from the company team."
         action={
-          live && canManage ? (
+          canManage ? (
             <Button
               variant="contained"
               onClick={() => {
@@ -123,18 +126,12 @@ export function ProjectTeamPanel({
         </Alert>
       ) : null}
 
-      {!live ? (
-        <Alert severity="info">
-          Sign in with live auth to add and remove project members from the API.
-        </Alert>
-      ) : null}
-
       <Paper sx={{ overflow: "auto", borderRadius: 1 }}>
-        {live && members.isLoading ? (
+        {members.isLoading ? (
           <Box sx={{ display: "grid", placeItems: "center", py: 8 }}>
             <CircularProgress size={28} />
           </Box>
-        ) : live && members.isError ? (
+        ) : members.isError ? (
           <Alert severity="error" sx={{ m: 2 }}>
             {getApiErrorMessage(members.error)}
           </Alert>
@@ -145,15 +142,15 @@ export function ProjectTeamPanel({
                 <TableCell>Name</TableCell>
                 <TableCell>Role</TableCell>
                 <TableCell>Added</TableCell>
-                {live && canManage ? <TableCell align="right"> </TableCell> : null}
+                {canManage ? <TableCell align="right"> </TableCell> : null}
               </TableRow>
             </TableHead>
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={live && canManage ? 4 : 3}>
+                  <TableCell colSpan={canManage ? 4 : 3}>
                     <Typography color="text.secondary" sx={{ py: 3, textAlign: "center" }}>
-                      No one is assigned to this project yet.
+                      No one is assigned to this product yet.
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -170,10 +167,10 @@ export function ProjectTeamPanel({
                         </Typography>
                       </TableCell>
                       <TableCell>
-                        <Chip size="small" label={ROLE_LABELS[member.role] ?? member.role} />
+                        <Chip size="small" label={PRODUCT_ROLE_LABELS[member.role] ?? member.role} />
                       </TableCell>
                       <TableCell>{formatWhen(member.created_at)}</TableCell>
-                      {live && canManage ? (
+                      {canManage ? (
                         <TableCell align="right">
                           <Button
                             size="small"
@@ -203,10 +200,10 @@ export function ProjectTeamPanel({
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Add project member</DialogTitle>
+        <DialogTitle>Add product member</DialogTitle>
         <DialogContent>
           <Typography color="text.secondary" sx={{ mb: 1.5 }}>
-            Choose someone already in the company, then set their access on this project.
+            Choose someone already in the company, then set their access on this product.
           </Typography>
           {error ? (
             <Alert severity="error" sx={{ mb: 1.5 }}>
@@ -215,7 +212,7 @@ export function ProjectTeamPanel({
           ) : null}
           {available.length === 0 ? (
             <Alert severity="info">
-              Everyone in the company is already on this project. Add people on Team first.
+              Everyone in the company is already on this product. Add people on Team first.
             </Alert>
           ) : (
             <>
@@ -240,16 +237,18 @@ export function ProjectTeamPanel({
               </TextField>
               <TextField
                 select
-                label="Project role"
+                label="Product role"
                 fullWidth
                 margin="normal"
                 value={role}
                 placeholder="Select a role"
-                onChange={(event) => setRole(event.target.value as ApiProjectRole)}
+                onChange={(event) => setRole(event.target.value as ApiProductMemberRole)}
               >
-                <MenuItem value="project_admin">Project admin</MenuItem>
-                <MenuItem value="editor">Editor</MenuItem>
-                <MenuItem value="viewer">Viewer</MenuItem>
+                {PRODUCT_ROLES.map((item) => (
+                  <MenuItem key={item} value={item}>
+                    {PRODUCT_ROLE_LABELS[item]}
+                  </MenuItem>
+                ))}
               </TextField>
             </>
           )}
@@ -274,10 +273,10 @@ export function ProjectTeamPanel({
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Remove from project</DialogTitle>
+        <DialogTitle>Remove from product</DialogTitle>
         <DialogContent>
           <Typography>
-            Remove {removing?.user_full_name || removing?.user_email} from this project? They
+            Remove {removing?.user_full_name || removing?.user_email} from this product? They
             stay in the company team.
           </Typography>
           {error ? (
@@ -308,23 +307,4 @@ function formatWhen(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString(undefined, { dateStyle: "medium" });
-}
-
-function mockRows(companyId: string | null | undefined, projectId: string): ApiProjectMember[] {
-  if (!companyId) return [];
-  return listTeamMembers(companyId)
-    .filter(
-      (member) =>
-        member.user.role === "ADMIN" || member.assignedBrandIds.includes(projectId),
-    )
-    .map((member) => ({
-      id: member.user.id,
-      project_id: projectId,
-      user_id: member.user.id,
-      role: member.user.role === "ADMIN" ? "project_admin" : "editor",
-      added_by: member.user.id,
-      created_at: new Date().toISOString(),
-      user_email: member.user.email,
-      user_full_name: member.user.name,
-    }));
 }

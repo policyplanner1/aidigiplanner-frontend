@@ -9,6 +9,7 @@ import {
   Tune,
 } from "@mui/icons-material";
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -84,7 +85,7 @@ export function ProfilePerformancePage() {
     [accounts, platforms, projects, source],
   );
 
-  if (!can(PERMISSIONS.CROSS_NETWORK_VIEW)) {
+  if (!can(PERMISSIONS.ANALYTICS_VIEW)) {
     return <Navigate to="/app/dashboard" replace />;
   }
 
@@ -113,6 +114,10 @@ export function ProfilePerformancePage() {
   return (
     <ScreenFrame>
       <Box sx={{ display: "grid", gap: 2 }}>
+        <Alert severity="info">
+          Sample data — aidigiplanner-backend doesn't have a real analytics module yet.
+          Connected accounts below are real; the metrics are illustrative, not live.
+        </Alert>
         <Box sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
           <Box>
             <Typography sx={{ ...TYPE.title, fontSize: { xs: "1.35rem", md: "1.55rem" } }}>

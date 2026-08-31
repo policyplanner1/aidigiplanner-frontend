@@ -130,7 +130,7 @@ export function SuperAdminDashboard() {
       value: data?.companies.pending_approval ?? 0,
       hint: "Waiting for approval",
       accent: "#E25030",
-      to: "/super-admin/organizations",
+      to: "/super-admin/companies",
     },
     {
       title: "AI generations",
@@ -152,14 +152,14 @@ export function SuperAdminDashboard() {
       value: data?.companies.suspended ?? 0,
       hint: "Need a review",
       accent: "#E8A838",
-      to: "/super-admin/organizations",
+      to: "/super-admin/companies",
     },
     {
       title: "Rejected companies",
       value: data?.companies.rejected ?? 0,
       hint: "Not approved",
       accent: "#E25030",
-      to: "/super-admin/organizations",
+      to: "/super-admin/companies",
     },
     {
       title: "Pending users",
@@ -279,7 +279,7 @@ export function SuperAdminDashboard() {
                     <Chip
                       size="small"
                       label={`${padCount(data?.companies.pending_approval ?? 0)} pending`}
-                      onClick={() => navigate("/super-admin/organizations")}
+                      onClick={() => navigate("/super-admin/companies")}
                     />
                   </Box>
                   {pending.isLoading ? (
@@ -292,7 +292,7 @@ export function SuperAdminDashboard() {
                     waiting.map((company) => (
                       <Box
                         key={company.id}
-                        onClick={() => navigate("/super-admin/organizations")}
+                        onClick={() => navigate("/super-admin/companies")}
                         sx={{
                           py: 1.1,
                           px: 1,

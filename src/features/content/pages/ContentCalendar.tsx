@@ -2,40 +2,32 @@ import {
   Add,
   ChevronLeft,
   ChevronRight,
-  CloudUpload,
-  FileUploadOutlined,
-  FilterList,
   GridView,
-  Inbox,
   KeyboardArrowDown,
-  LocalOfferOutlined,
   MoreHoriz,
-  MoreVert,
   PlayArrow,
   ViewList,
-  Whatshot,
-  AutoAwesome,
 } from "@mui/icons-material";
-import {
-  Box,
-  Button,
-  Checkbox,
-  IconButton,
-  Menu,
-  MenuItem,
-  Typography,
-} from "@mui/material";
-import { useMemo, useState, type MouseEvent } from "react";
+import { Alert, Box, Button, Checkbox, IconButton, Menu, MenuItem, Typography } from "@mui/material";
+import { useMemo, useState, type DragEvent, type MouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { NeedProject } from "../../../components/ui/NeedProject";
 import { ScreenFrame } from "../../../components/ui/ScreenFrame";
-import { getContentFormat } from "../../../constants/contentFormats";
+import { StatusBadge } from "../../../components/ui/StatusBadge";
 import { FONT_FAMILY, TYPE } from "../../../constants/fonts";
 import { GLASS_SX, SURFACE } from "../../../constants/layout";
+import { usePermissions } from "../../../hooks/usePermissions";
 import { useWorkspace } from "../../../hooks/useWorkspace";
-import { getSocialPosts, type SocialPost } from "../../../services/social/publishingService";
-import { handleFromName, mediaTone, PlatformMark } from "../../social/components/PlatformMark";
-import { PostComposerDialog } from "../components/PostComposerDialog";
+import { PERMISSIONS } from "../../../permissions/permissions";
+import { getApiErrorMessage } from "../../../services/api/errors";
+import {
+  listCreativeConcepts,
+  scheduleConcept,
+  type CreativeConcept,
+} from "../../../services/content/creativesApi";
+import { mediaTone } from "../../social/components/PlatformMark";
 
 const VIEWS = [
   { id: "list" as const, label: "List" },
@@ -43,7 +35,6 @@ const VIEWS = [
   { id: "month" as const, label: "Month" },
 ];
 
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const WEEKDAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TAG_TONES = ["#F4C7C3", "#F8D4B0", "#CDE6DC", "#D5D4F5", "#F3E2A8"];
 
@@ -72,13 +63,8 @@ function isoDate(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function prettyTime(time: string) {
-  const [hours, minutes] = time.split(":").map(Number);
-  const hour = Number.isFinite(hours) ? hours : 9;
-  const minute = Number.isFinite(minutes) ? minutes : 0;
-  const suffix = hour >= 12 ? "pm" : "am";
-  const twelve = hour % 12 || 12;
-  return `${twelve}:${String(minute).padStart(2, "0")} ${suffix}`;
+function prettyTime(date: Date) {
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
 function monthCells(cursor: Date) {
@@ -86,66 +72,105 @@ function monthCells(cursor: Date) {
   return Array.from({ length: 42 }, (_, index) => addDays(startOfWeek(first), index));
 }
 
-function placePosts(posts: SocialPost[], cells: Date[], month: number) {
-  const map = new Map<string, SocialPost[]>();
-  cells.forEach((cell) => map.set(isoDate(cell), []));
-  WEEKDAYS.forEach((weekday, weekdayIndex) => {
-    const inMonth = cells.filter((cell) => cell.getDay() === weekdayIndex && cell.getMonth() === month);
-    const fallback = cells.filter((cell) => cell.getDay() === weekdayIndex);
-    const dates = inMonth.length ? inMonth : fallback;
-    const list = posts
-      .filter((post) => post.day === weekday)
-      .sort((a, b) => a.time.localeCompare(b.time));
-    list.forEach((post, index) => {
-      const date = dates[index % dates.length];
-      if (!date) return;
-      map.get(isoDate(date))?.push(post);
-    });
-  });
-  return map;
-}
-
 function dateLabel(date: Date, month: number) {
   if (date.getMonth() === month) return String(date.getDate());
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+// Real concepts carry an actual ISO scheduled_at/published_at, not a mock
+// recurring weekday — this is the one real date a concept has to show on a
+// calendar. Drafts / in-review / approved-but-unscheduled concepts have
+// neither, and show in the "Not yet scheduled" strip instead.
+function conceptDate(concept: CreativeConcept): Date | null {
+  const raw = concept.scheduled_at || concept.published_at;
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+// CreativeConcept has no stored "format" field (platforms/format are chosen at
+// generation time, not persisted per concept) — infer a display format from
+// what was actually generated, rather than fabricating one.
+function inferFormat(concept: CreativeConcept): "carousel" | "reel" | "post" {
+  if (concept.carousel_slides?.length) return "carousel";
+  if (concept.reel_script) return "reel";
+  return "post";
+}
+
+function placeByDate(concepts: CreativeConcept[], cells: Date[]) {
+  const map = new Map<string, CreativeConcept[]>();
+  cells.forEach((cell) => map.set(isoDate(cell), []));
+  concepts.forEach((concept) => {
+    const date = conceptDate(concept);
+    if (!date) return;
+    const key = isoDate(date);
+    if (map.has(key)) map.get(key)?.push(concept);
+  });
+  for (const list of map.values()) {
+    list.sort((a, b) => (conceptDate(a)?.getTime() ?? 0) - (conceptDate(b)?.getTime() ?? 0));
+  }
+  return map;
+}
+
+const STATUS_OPTIONS = ["draft", "in_review", "approved", "scheduled", "published", "rejected"];
+
 export function ContentCalendarPage() {
+  const navigate = useNavigate();
   const { currentProject } = useWorkspace();
+  const { can } = usePermissions();
+  const canReschedule = can(PERMISSIONS.CONTENT_PUBLISH);
+  const queryClient = useQueryClient();
+
   const [view, setView] = useState<(typeof VIEWS)[number]["id"]>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [compact, setCompact] = useState(false);
-  const [profiles, setProfiles] = useState<string[]>([]);
-  const [postTypes, setPostTypes] = useState<string[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [menu, setMenu] = useState<{ key: string; el: HTMLElement } | null>(null);
-  const [tick, setTick] = useState(0);
-  const [composer, setComposer] = useState<{ post: SocialPost | null; date: Date } | null>(null);
-  const posts = getSocialPosts(currentProject?.id ?? "none");
-  void tick;
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
 
-  const platforms = useMemo(() => Array.from(new Set(posts.map((post) => post.platform))), [posts]);
-  const types = useMemo(() => Array.from(new Set(posts.map((post) => getContentFormat(post.format).label))), [posts]);
+  const query = useQuery({
+    queryKey: ["creative-concepts", currentProject?.id, "calendar"],
+    queryFn: () => listCreativeConcepts(currentProject!.id).then((res) => res.data ?? []),
+    enabled: Boolean(currentProject?.id),
+  });
+
+  const reschedule = useMutation({
+    mutationFn: ({ conceptId, isoAt }: { conceptId: string; isoAt: string }) =>
+      scheduleConcept(currentProject!.id, conceptId, isoAt),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["creative-concepts", currentProject?.id] });
+    },
+    onError: (error) => setRescheduleError(getApiErrorMessage(error)),
+  });
+
+  const concepts = useMemo(() => query.data ?? [], [query.data]);
+
   const tagOptions = useMemo(
-    () => Array.from(new Set(posts.flatMap((post) => post.hashtags.split(" ").map((item) => item.replace("#", "")).filter(Boolean)))),
-    [posts],
+    () => Array.from(new Set(concepts.flatMap((concept) => concept.hashtags ?? []).map((tag) => tag.replace("#", "")))),
+    [concepts],
   );
 
   const filtered = useMemo(() => {
-    return posts.filter((post) => {
-      if (profiles.length && !profiles.includes(post.platform)) return false;
-      if (postTypes.length && !postTypes.includes(getContentFormat(post.format).label)) return false;
-      const postTags = post.hashtags.split(" ").map((item) => item.replace("#", ""));
-      if (tags.length && !tags.some((tag) => postTags.includes(tag))) return false;
+    return concepts.filter((concept) => {
+      if (statusFilter.length && !statusFilter.includes(concept.status ?? "draft")) return false;
+      if (tagFilter.length) {
+        const tags = (concept.hashtags ?? []).map((tag) => tag.replace("#", ""));
+        if (!tagFilter.some((tag) => tags.includes(tag))) return false;
+      }
       return true;
     });
-  }, [posts, postTypes, profiles, tags]);
+  }, [concepts, statusFilter, tagFilter]);
+
+  const dated = filtered.filter((concept) => conceptDate(concept));
+  const unscheduled = filtered.filter((concept) => !conceptDate(concept));
 
   const weekStart = startOfWeek(cursor);
-  const weekDates = WEEKDAYS.map((_, index) => addDays(weekStart, index));
+  const weekDates = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   const cells = monthCells(cursor);
-  const byDate = useMemo(() => placePosts(filtered, cells, cursor.getMonth()), [cells, cursor, filtered]);
-  const filtersActive = profiles.length + postTypes.length + tags.length > 0;
+  const byDate = useMemo(() => placeByDate(dated, cells), [dated, cells]);
+  const filtersActive = statusFilter.length + tagFilter.length > 0;
 
   const shift = (direction: -1 | 1) => {
     if (view === "month") setCursor(addMonths(cursor, direction));
@@ -161,8 +186,20 @@ export function ContentCalendarPage() {
       ? formatMonth(cursor)
       : `Week of ${weekStart.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 
-  const openPost = (post: SocialPost, date: Date) => setComposer({ post, date });
-  const openNew = (date: Date) => setComposer({ post: null, date });
+  const openConcept = (concept: CreativeConcept) => navigate(`/app/content/${concept.id}`);
+  const openNew = () => navigate("/app/create");
+
+  const dropOnDate = (date: Date) => {
+    if (!dragId) return;
+    const existing = concepts.find((item) => item.id === dragId);
+    const previous = existing ? conceptDate(existing) : null;
+    const next = new Date(date);
+    // Keep the original time of day when one exists; otherwise default to 9am.
+    next.setHours(previous?.getHours() ?? 9, previous?.getMinutes() ?? 0, 0, 0);
+    setRescheduleError(null);
+    reschedule.mutate({ conceptId: dragId, isoAt: next.toISOString() });
+    setDragId(null);
+  };
 
   return (
     <ScreenFrame>
@@ -180,12 +217,6 @@ export function ContentCalendarPage() {
           <Typography sx={{ ...TYPE.title, fontSize: { xs: "1.2rem", md: "1.45rem" }, flex: 1, minWidth: 140 }}>
             {title}
           </Typography>
-          <Button variant="contained" startIcon={<FilterList />} sx={{ backgroundColor: "#3D2F2A" }}>
-            Filters
-          </Button>
-          <IconButton size="small">
-            <Whatshot fontSize="small" />
-          </IconButton>
           <IconButton size="small" onClick={() => setCompact(true)} sx={{ color: compact ? "#3D2F2A" : "text.secondary" }}>
             <ViewList fontSize="small" />
           </IconButton>
@@ -193,15 +224,9 @@ export function ContentCalendarPage() {
             <GridView fontSize="small" />
           </IconButton>
           <ViewSwitch value={view} onChange={setView} />
-          <Button startIcon={<AutoAwesome />} sx={{ borderRadius: "10px", fontWeight: 700, color: "#1F8A80" }}>
-            AI Assist
+          <Button variant="contained" startIcon={<Add />} onClick={openNew}>
+            Create
           </Button>
-          <IconButton size="small">
-            <FileUploadOutlined fontSize="small" />
-          </IconButton>
-          <IconButton size="small">
-            <MoreVert fontSize="small" />
-          </IconButton>
         </Box>
 
         <Box
@@ -211,21 +236,19 @@ export function ContentCalendarPage() {
             py: 1.15,
             borderRadius: 1,
             display: "grid",
-            gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(3, minmax(0, 1fr)) auto" },
+            gridTemplateColumns: { xs: "1fr 1fr", md: "repeat(2, minmax(0, 1fr)) auto" },
             gap: 2,
             alignItems: "end",
           }}
         >
-          <FilterTrigger label="Profiles" value={labelFor(profiles)} onClick={(event) => setMenu({ key: "profiles", el: event.currentTarget })} />
-          <FilterTrigger label="Post Types" value={labelFor(postTypes)} onClick={(event) => setMenu({ key: "types", el: event.currentTarget })} />
-          <FilterTrigger label="Tags" value={labelFor(tags)} onClick={(event) => setMenu({ key: "tags", el: event.currentTarget })} />
+          <FilterTrigger label="Status" value={labelFor(statusFilter)} onClick={(event) => setMenu({ key: "status", el: event.currentTarget })} />
+          <FilterTrigger label="Tags" value={labelFor(tagFilter)} onClick={(event) => setMenu({ key: "tags", el: event.currentTarget })} />
           <Button
             size="small"
             disabled={!filtersActive}
             onClick={() => {
-              setProfiles([]);
-              setPostTypes([]);
-              setTags([]);
+              setStatusFilter([]);
+              setTagFilter([]);
             }}
             sx={{ color: "#1F8A80", fontWeight: 400, justifySelf: { md: "end" }, "&.Mui-disabled": { color: "#B7A59B" } }}
           >
@@ -233,31 +256,67 @@ export function ContentCalendarPage() {
           </Button>
         </Box>
 
-        {view === "list" ? (
+        {query.isError ? <Alert severity="error">{getApiErrorMessage(query.error)}</Alert> : null}
+        {rescheduleError ? (
+          <Alert severity="error" onClose={() => setRescheduleError(null)}>
+            {rescheduleError}
+          </Alert>
+        ) : null}
+
+        {canReschedule && !query.isLoading ? (
+          <Typography variant="caption" color="text.secondary">
+            Drag a card to a different day to reschedule it.
+          </Typography>
+        ) : null}
+
+        {unscheduled.length > 0 ? (
+          <Box>
+            <Typography sx={{ fontWeight: 700, mb: 1, fontSize: 13.5 }}>
+              Not yet scheduled ({unscheduled.length})
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, overflowX: "auto", pb: 0.5 }}>
+              {unscheduled.map((concept) => (
+                <Box key={concept.id} sx={{ minWidth: 220, flexShrink: 0 }}>
+                  <CalendarConceptCard
+                    concept={concept}
+                    projectName={currentProject.name}
+                    variant="month"
+                    draggable={canReschedule}
+                    onDragStart={() => setDragId(concept.id)}
+                    onSelect={() => openConcept(concept)}
+                  />
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        ) : null}
+
+        {query.isLoading ? (
+          <Typography color="text.secondary">Loading…</Typography>
+        ) : view === "list" ? (
           <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: { xs: "1fr", md: compact ? "1fr 1fr" : "1fr" } }}>
-            {filtered.map((post) => {
-              const date = dateForPost(post, byDate) ?? cursor;
-              return (
-                <CalendarPostCard
-                  key={post.id}
-                  post={post}
-                  projectName={currentProject.name}
-                  handle={handleFromName(currentProject.name)}
-                  variant="week"
-                  onSelect={() => openPost(post, date)}
-                />
-              );
-            })}
+            {dated.map((concept) => (
+              <CalendarConceptCard
+                key={concept.id}
+                concept={concept}
+                projectName={currentProject.name}
+                variant="week"
+                draggable={canReschedule}
+                onDragStart={() => setDragId(concept.id)}
+                onSelect={() => openConcept(concept)}
+              />
+            ))}
           </Box>
         ) : view === "week" ? (
           <WeekGrid
             dates={weekDates}
-            posts={filtered}
+            byDate={byDate}
             projectName={currentProject.name}
-            handle={handleFromName(currentProject.name)}
             compact={compact}
-            onSelect={openPost}
-            onAdd={openNew}
+            canReschedule={canReschedule}
+            onDragStart={setDragId}
+            onDrop={dropOnDate}
+            onSelect={openConcept}
           />
         ) : (
           <MonthGrid
@@ -265,37 +324,18 @@ export function ContentCalendarPage() {
             month={cursor.getMonth()}
             byDate={byDate}
             projectName={currentProject.name}
-            handle={handleFromName(currentProject.name)}
-            onSelect={openPost}
-            onAdd={openNew}
+            canReschedule={canReschedule}
+            onDragStart={setDragId}
+            onDrop={dropOnDate}
+            onSelect={openConcept}
           />
         )}
       </Box>
 
-      <PostComposerDialog
-        open={Boolean(composer)}
-        project={currentProject}
-        post={composer?.post ?? null}
-        date={composer?.date ?? null}
-        onClose={() => setComposer(null)}
-        onSaved={() => setTick((value) => value + 1)}
-      />
-
-      <MultiMenu open={menu?.key === "profiles"} anchorEl={menu?.el} options={platforms} selected={profiles} onToggle={(value) => setProfiles((current) => toggleItem(current, value))} onClose={() => setMenu(null)} />
-      <MultiMenu open={menu?.key === "types"} anchorEl={menu?.el} options={types} selected={postTypes} onToggle={(value) => setPostTypes((current) => toggleItem(current, value))} onClose={() => setMenu(null)} />
-      <MultiMenu open={menu?.key === "tags"} anchorEl={menu?.el} options={tagOptions} selected={tags} onToggle={(value) => setTags((current) => toggleItem(current, value))} onClose={() => setMenu(null)} />
+      <MultiMenu open={menu?.key === "status"} anchorEl={menu?.el} options={STATUS_OPTIONS} selected={statusFilter} onToggle={(value) => setStatusFilter((current) => toggleItem(current, value))} onClose={() => setMenu(null)} />
+      <MultiMenu open={menu?.key === "tags"} anchorEl={menu?.el} options={tagOptions} selected={tagFilter} onToggle={(value) => setTagFilter((current) => toggleItem(current, value))} onClose={() => setMenu(null)} />
     </ScreenFrame>
   );
-}
-
-function dateForPost(post: SocialPost, byDate: Map<string, SocialPost[]>) {
-  for (const [key, list] of byDate.entries()) {
-    if (list.some((item) => item.id === post.id)) {
-      const [year, month, day] = key.split("-").map(Number);
-      return new Date(year, (month ?? 1) - 1, day ?? 1);
-    }
-  }
-  return null;
 }
 
 function MonthGrid({
@@ -303,17 +343,19 @@ function MonthGrid({
   month,
   byDate,
   projectName,
-  handle,
+  canReschedule,
+  onDragStart,
+  onDrop,
   onSelect,
-  onAdd,
 }: {
   cells: Date[];
   month: number;
-  byDate: Map<string, SocialPost[]>;
+  byDate: Map<string, CreativeConcept[]>;
   projectName: string;
-  handle: string;
-  onSelect: (post: SocialPost, date: Date) => void;
-  onAdd: (date: Date) => void;
+  canReschedule: boolean;
+  onDragStart: (id: string) => void;
+  onDrop: (date: Date) => void;
+  onSelect: (concept: CreativeConcept) => void;
 }) {
   return (
     <Box sx={{ border: `1px solid ${SURFACE.border}`, borderRadius: "12px", overflow: "hidden", backgroundColor: "#FFFDFB" }}>
@@ -327,11 +369,16 @@ function MonthGrid({
       <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", lg: "repeat(7, minmax(0, 1fr))" } }}>
         {cells.map((date) => {
           const key = isoDate(date);
-          const dayPosts = byDate.get(key) ?? [];
+          const dayConcepts = byDate.get(key) ?? [];
           const outside = date.getMonth() !== month;
           return (
             <Box
               key={key}
+              onDragOver={(event) => canReschedule && event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                onDrop(date);
+              }}
               sx={{
                 minHeight: { xs: 180, lg: 210 },
                 maxHeight: { lg: 260 },
@@ -346,23 +393,21 @@ function MonthGrid({
                 <Typography sx={{ fontFamily: FONT_FAMILY, fontSize: 12, fontWeight: 700, color: outside ? "#B7A59B" : "#6B5E57" }}>
                   {dateLabel(date, month)}
                 </Typography>
-                {dayPosts.length ? (
+                {dayConcepts.length ? (
                   <Box sx={{ px: 0.7, py: 0.05, borderRadius: "999px", backgroundColor: "#1F8A80", color: "#FFF9F5", fontSize: 10, fontWeight: 800 }}>
-                    {dayPosts.length}
+                    {dayConcepts.length}
                   </Box>
                 ) : null}
-                <IconButton size="small" onClick={() => onAdd(date)} sx={{ ml: "auto", p: 0.2 }}>
-                  <Add sx={{ fontSize: 16 }} />
-                </IconButton>
               </Box>
-              {dayPosts.map((post) => (
-                <CalendarPostCard
-                  key={post.id}
-                  post={post}
+              {dayConcepts.map((concept) => (
+                <CalendarConceptCard
+                  key={concept.id}
+                  concept={concept}
                   projectName={projectName}
-                  handle={handle}
                   variant="month"
-                  onSelect={() => onSelect(post, date)}
+                  draggable={canReschedule}
+                  onDragStart={() => onDragStart(concept.id)}
+                  onSelect={() => onSelect(concept)}
                 />
               ))}
             </Box>
@@ -375,20 +420,22 @@ function MonthGrid({
 
 function WeekGrid({
   dates,
-  posts,
+  byDate,
   projectName,
-  handle,
   compact,
+  canReschedule,
+  onDragStart,
+  onDrop,
   onSelect,
-  onAdd,
 }: {
   dates: Date[];
-  posts: SocialPost[];
+  byDate: Map<string, CreativeConcept[]>;
   projectName: string;
-  handle: string;
   compact: boolean;
-  onSelect: (post: SocialPost, date: Date) => void;
-  onAdd: (date: Date) => void;
+  canReschedule: boolean;
+  onDragStart: (id: string) => void;
+  onDrop: (date: Date) => void;
+  onSelect: (concept: CreativeConcept) => void;
 }) {
   return (
     <Box
@@ -403,10 +450,15 @@ function WeekGrid({
       }}
     >
       {dates.map((date, index) => {
-        const dayPosts = posts.filter((post) => post.day === WEEKDAYS[index]);
+        const dayConcepts = byDate.get(isoDate(date)) ?? [];
         return (
           <Box
             key={isoDate(date)}
+            onDragOver={(event) => canReschedule && event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              onDrop(date);
+            }}
             sx={{
               minHeight: { xs: 280, lg: "68vh" },
               maxHeight: { lg: "68vh" },
@@ -419,18 +471,16 @@ function WeekGrid({
               <Typography sx={{ ...TYPE.label, fontSize: 13, color: "#4A342C" }}>
                 {WEEKDAY_LABELS[index]} {date.getDate()}
               </Typography>
-              <IconButton size="small" onClick={() => onAdd(date)} sx={{ ml: "auto", p: 0.25 }}>
-                <Add sx={{ fontSize: 18 }} />
-              </IconButton>
             </Box>
-            {dayPosts.map((post) => (
-              <CalendarPostCard
-                key={post.id}
-                post={post}
+            {dayConcepts.map((concept) => (
+              <CalendarConceptCard
+                key={concept.id}
+                concept={concept}
                 projectName={projectName}
-                handle={handle}
                 variant={compact ? "month" : "week"}
-                onSelect={() => onSelect(post, date)}
+                draggable={canReschedule}
+                onDragStart={() => onDragStart(concept.id)}
+                onSelect={() => onSelect(concept)}
               />
             ))}
           </Box>
@@ -511,52 +561,57 @@ function FilterTrigger({
   );
 }
 
-function CalendarPostCard({
-  post,
+function CalendarConceptCard({
+  concept,
   projectName,
-  handle,
   variant,
+  draggable,
+  onDragStart,
   onSelect,
 }: {
-  post: SocialPost;
+  concept: CreativeConcept;
   projectName: string;
-  handle: string;
   variant: "month" | "week";
+  draggable: boolean;
+  onDragStart: () => void;
   onSelect: () => void;
 }) {
-  const format = getContentFormat(post.format);
-  const video = post.format === "reel" || post.format === "short" || post.format === "video";
-  const tagColor = TAG_TONES[post.title.length % TAG_TONES.length] ?? TAG_TONES[0];
-  const metric = post.status === "published" ? "12%" : post.status === "scheduled" ? "N/A" : "0%";
-  const pending = post.status === "draft" || post.status === "in_review";
+  const format = inferFormat(concept);
+  const date = conceptDate(concept);
+  const video = format === "reel";
+  const title = concept.on_image_headline || concept.angle || concept.hook || "Untitled";
+  const tagColor = TAG_TONES[title.length % TAG_TONES.length] ?? TAG_TONES[0];
   const compact = variant === "month";
+
+  const handleDragStart = (event: DragEvent<HTMLDivElement>) => {
+    event.dataTransfer.effectAllowed = "move";
+    onDragStart();
+  };
 
   return (
     <Box
       onClick={onSelect}
+      draggable={draggable}
+      onDragStart={draggable ? handleDragStart : undefined}
       sx={{
         mb: 1,
         p: compact ? 1 : 1.2,
         borderRadius: "12px",
-        backgroundColor: pending ? "#FFF6D8" : "#FFFDFB",
+        backgroundColor: concept.status === "draft" || concept.status === "in_review" ? "#FFF6D8" : "#FFFDFB",
         border: `1px solid ${SURFACE.border}`,
         boxShadow: "0 6px 14px rgba(74, 52, 44, 0.04)",
-        cursor: "pointer",
+        cursor: draggable ? "grab" : "pointer",
         "&:hover": { borderColor: "#D9CBBE", boxShadow: "0 10px 18px rgba(74, 52, 44, 0.07)" },
       }}
     >
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, mb: 0.7 }}>
-        {compact ? <PlatformMark platform={post.platform} size={16} /> : <CloudUpload sx={{ fontSize: 16, color: "#8A6F64" }} />}
-        <Typography sx={{ ml: "auto", fontFamily: FONT_FAMILY, fontWeight: 400, fontSize: 11, color: "#8A6F64" }}>
-          {prettyTime(post.time)}
-        </Typography>
+        <StatusBadge status={concept.status} />
+        {date ? (
+          <Typography sx={{ ml: "auto", fontFamily: FONT_FAMILY, fontWeight: 400, fontSize: 11, color: "#8A6F64" }}>
+            {prettyTime(date)}
+          </Typography>
+        ) : null}
       </Box>
-      {compact ? null : (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, mb: 0.7 }}>
-          <PlatformMark platform={post.platform} size={16} />
-          <Typography sx={{ fontFamily: FONT_FAMILY, fontSize: 12, color: "#6B5E57" }}>{handle}</Typography>
-        </Box>
-      )}
       <Box sx={{ display: "flex", gap: 1 }}>
         <Typography
           sx={{
@@ -572,7 +627,7 @@ function CalendarPostCard({
             overflow: "hidden",
           }}
         >
-          {post.caption}
+          {title}
         </Typography>
         {compact ? (
           <Box
@@ -582,7 +637,7 @@ function CalendarPostCard({
               height: 44,
               borderRadius: "8px",
               flexShrink: 0,
-              background: `linear-gradient(135deg, ${mediaTone(post.format)}, ${mediaTone(post.format)}88)`,
+              background: `linear-gradient(135deg, ${mediaTone(format)}, ${mediaTone(format)}88)`,
             }}
           >
             {video ? <PlayArrow sx={{ position: "absolute", inset: 0, m: "auto", color: "#FFF9F5", fontSize: 18 }} /> : null}
@@ -590,7 +645,7 @@ function CalendarPostCard({
         ) : null}
       </Box>
       {compact ? null : (
-        <Box sx={{ position: "relative", mt: 1, height: 110, borderRadius: "10px", background: `linear-gradient(135deg, ${mediaTone(post.format)}, ${mediaTone(post.format)}88)` }}>
+        <Box sx={{ position: "relative", mt: 1, height: 110, borderRadius: "10px", background: `linear-gradient(135deg, ${mediaTone(format)}, ${mediaTone(format)}88)` }}>
           {video ? <PlayArrow sx={{ position: "absolute", inset: 0, m: "auto", color: "#FFF9F5", fontSize: 28 }} /> : null}
         </Box>
       )}
@@ -612,18 +667,16 @@ function CalendarPostCard({
           whiteSpace: "nowrap",
         }}
       >
-        {format.label} · {projectName}
+        {format} · {projectName}
       </Box>
-      <Box sx={{ display: "flex", alignItems: "center", gap: 0.7, mt: 0.7, color: "#8A6F64" }}>
-        <MoreHoriz sx={{ fontSize: 16 }} />
-        <LocalOfferOutlined sx={{ fontSize: 15, color: "#3D7EA6" }} />
-        <Inbox sx={{ fontSize: 15 }} />
-        {compact ? (
-          <Typography sx={{ ml: "auto", fontFamily: FONT_FAMILY, fontWeight: 600, fontSize: 11, color: "#8A6F64" }}>
-            {metric}
+      {concept.compliance_notes?.length ? (
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 0.7, color: "#C45C4A" }}>
+          <MoreHoriz sx={{ fontSize: 15 }} />
+          <Typography sx={{ fontSize: 10.5, fontFamily: FONT_FAMILY }} noWrap>
+            {concept.compliance_notes[0]}
           </Typography>
-        ) : null}
-      </Box>
+        </Box>
+      ) : null}
     </Box>
   );
 }

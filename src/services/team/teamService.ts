@@ -9,12 +9,12 @@ import {
 import { getAllProjects } from "../projects/projectService";
 
 export const ORG_ASSIGNABLE_ROLES: RoleName[] = [
-  "ADMIN",
-  "SOCIAL_MANAGER",
-  "CONTENT_MANAGER",
-  "SALES_MANAGER",
+  "COMPANY_ADMIN",
+  "PRODUCT_MANAGER",
+  "CONTENT_CREATOR",
+  "APPROVER",
+  "PUBLISHER",
   "ANALYST",
-  "USER",
 ];
 
 export type TeamMember = StoredAccount;
@@ -68,7 +68,7 @@ export function createTeamMember(
   }
 
   const productAccess =
-    input.role === "ADMIN"
+    input.role === "COMPANY_ADMIN"
       ? getAllProjects()
           .filter((project) => project.organizationId === organizationId)
           .map((project) => ({
@@ -77,7 +77,7 @@ export function createTeamMember(
           }))
       : input.productAccess;
 
-  if (input.role !== "ADMIN" && productAccess.length === 0) {
+  if (input.role !== "COMPANY_ADMIN" && productAccess.length === 0) {
     throw new Error("Assign at least one product.");
   }
 
@@ -113,7 +113,7 @@ export function updateTeamMember(
     throw new Error("That teammate was not found.");
   }
 
-  if (options?.actorId === userId && input.role !== "ADMIN" && current.user.role === "ADMIN") {
+  if (options?.actorId === userId && input.role !== "COMPANY_ADMIN" && current.user.role === "COMPANY_ADMIN") {
     throw new Error("You cannot remove your own admin role.");
   }
 
@@ -129,7 +129,7 @@ export function updateTeamMember(
 
   const organizationId = current.user.organizationId;
   const productAccess =
-    input.role === "ADMIN" && organizationId
+    input.role === "COMPANY_ADMIN" && organizationId
       ? getAllProjects()
           .filter((project) => project.organizationId === organizationId)
           .map((project) => ({
@@ -138,7 +138,7 @@ export function updateTeamMember(
           }))
       : input.productAccess;
 
-  if (input.role !== "ADMIN" && productAccess.length === 0) {
+  if (input.role !== "COMPANY_ADMIN" && productAccess.length === 0) {
     throw new Error("Assign at least one product.");
   }
 

@@ -10,12 +10,13 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { NeedProject } from "../../../components/ui/NeedProject";
 import { ScreenFrame } from "../../../components/ui/ScreenFrame";
 import { getContentFormat, type ContentFormatId } from "../../../constants/contentFormats";
+import { CONTENT_FORMAT_ICONS } from "../../../constants/contentFormatIcons";
 import { useBrandProfile } from "../../brand/hooks/useBrandProfile";
 import { useAuth } from "../../../hooks/useAuth";
 import { usePermissions } from "../../../hooks/usePermissions";
@@ -24,10 +25,10 @@ import { PERMISSIONS } from "../../../permissions/permissions";
 import { getApiErrorMessage } from "../../../services/api/errors";
 import {
   ensureBrandProductLineForGenerate,
-  getBrandKit,
+  getBrandProfileForm,
   productLineApiId,
   productLineLabel,
-} from "../../../services/brand/brandKitService";
+} from "../../../services/brand/brandProfileService";
 import {
   approveAndPublishConcept,
   conceptToDraft,
@@ -57,19 +58,35 @@ function toggleItem<T>(list: T[], item: T) {
   return list.includes(item) ? list.filter((value) => value !== item) : [...list, item];
 }
 
+// There's no server-side progress percentage to poll -- generation is a
+// single opaque job. These are rough real-world timings observed for this
+// pipeline (ideation-only for reels/video since they stop at
+// awaiting_render; ideation+image render for everything else), used to
+// drive a believable progress curve rather than an indefinite spinner.
+function estimatedGenerateMs(format: ContentFormatId): number {
+  if (format === "reel" || format === "video") return 30_000;
+  if (format === "carousel") return 100_000;
+  return 75_000;
+}
+const ESTIMATED_RENDER_MS = 6 * 60_000;
+// Never let the simulated bar claim "done" before the job actually is --
+// it eases toward this ceiling and only the real completion fills the rest.
+const PROGRESS_CEILING = 92;
+
 export function ContentStudioPage() {
   const { currentProject, subProducts, currentSubProduct, setCurrentSubProductId } = useWorkspace();
   const { session } = useAuth();
   const { can } = usePermissions();
   const live = session?.source === "api";
   const profileQuery = useBrandProfile(currentProject?.id ?? "", currentProject?.name ?? "", live);
-  const kit = profileQuery.data ?? getBrandKit(currentProject?.id ?? "none", currentProject?.name ?? "", live);
+  const brandProfile = profileQuery.data ?? getBrandProfileForm(currentProject?.id ?? "none", currentProject?.name ?? "", live);
 
   const [format, setFormat] = useState<ContentFormatId>("post");
   const [platforms, setPlatforms] = useState<string[]>(["Instagram", "Facebook"]);
   const [brief, setBrief] = useState("");
   const [extraNotes, setExtraNotes] = useState("");
   const [productLine, setProductLine] = useState("");
+  const [conceptCount, setConceptCount] = useState(3);
   const [customize, setCustomize] = useState(false);
   const [objective, setObjective] = useState("");
   const [offer, setOffer] = useState("");
@@ -80,32 +97,43 @@ export function ContentStudioPage() {
   const [language, setLanguage] = useState("en");
   const [reelStyle, setReelStyle] = useState<ReelStyle>("story");
   const [voiceover, setVoiceover] = useState<VoiceoverMode>("silent_text");
+  const [reelDurationS, setReelDurationS] = useState(15);
   const [dryRun, setDryRun] = useState(false);
   const [day, setDay] = useState("Wed");
   const [time, setTime] = useState("19:30");
   const [job, setJob] = useState<GenerationJob | null>(null);
   const [concepts, setConcepts] = useState<CreativeConcept[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeSeverity, setNoticeSeverity] = useState<"success" | "error" | "info">("info");
   const [generating, setGenerating] = useState(false);
   const [rendering, setRendering] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const progressTimer = useRef<number | null>(null);
   const [busyAction, setBusyAction] = useState(false);
   const [selectedConcept, setSelectedConcept] = useState<CreativeConcept | null>(null);
 
+  useEffect(() => {
+    return () => {
+      if (progressTimer.current !== null) window.clearInterval(progressTimer.current);
+    };
+  }, []);
+
   const productLineOptions = useMemo(
     () =>
-      kit.productLines
+      brandProfile.productLines
         .map((line) => {
           const id = productLineApiId(line);
           return id ? { id, label: productLineLabel(line) } : null;
         })
         .filter((item): item is { id: string; label: string } => Boolean(item)),
-    [kit.productLines],
+    [brandProfile.productLines],
   );
   const selectedProductLine =
     productLineOptions.some((item) => item.id === productLine) ? productLine : (productLineOptions[0]?.id ?? "");
 
   const meta = getContentFormat(format);
-  const isReel = toCreativeFormat(format) === "reel";
+  const creativeFormat = toCreativeFormat(format);
+  const isReel = creativeFormat === "reel" || creativeFormat === "video";
   const awaitingRender = job?.status === "awaiting_render";
   const channelOptions = meta.platforms;
   const channelLabel = platforms.join(", ") || "your channels";
@@ -115,24 +143,49 @@ export function ContentStudioPage() {
     return <NeedProject feature="Content Studio" />;
   }
 
+  const showNotice = (message: string | null, severity: "success" | "error" | "info" = "info") => {
+    setNotice(message);
+    setNoticeSeverity(severity);
+  };
+
+  const stopProgress = (finalValue?: number) => {
+    if (progressTimer.current !== null) {
+      window.clearInterval(progressTimer.current);
+      progressTimer.current = null;
+    }
+    if (finalValue !== undefined) setProgress(finalValue);
+  };
+
+  const startProgress = (durationMs: number) => {
+    stopProgress();
+    const startedAt = Date.now();
+    setProgress(2);
+    progressTimer.current = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const eased = PROGRESS_CEILING * (1 - Math.exp(-elapsed / durationMs));
+      setProgress(Math.min(PROGRESS_CEILING, Math.round(eased)));
+    }, 250);
+  };
+
   const generate = async (noteExtra = "") => {
-    setNotice(null);
+    showNotice(null);
     if (platforms.length === 0) {
-      setNotice("Choose at least one social platform.");
+      showNotice("Choose at least one social platform.", "error");
       return;
     }
     if (brief.trim().length < 3) {
-      setNotice("Write a slightly longer topic before generating.");
+      showNotice("Write a slightly longer topic before generating.", "error");
       return;
     }
     if (live && profileQuery.isLoading) {
-      setNotice("Loading brand kit…");
+      showNotice("Loading brand profile…", "info");
       return;
     }
 
     setGenerating(true);
     setConcepts([]);
     setJob(null);
+    startProgress(estimatedGenerateMs(format));
 
     const notes = [extraNotes.trim() || brief.trim(), noteExtra.trim()].filter(Boolean).join("\n");
 
@@ -148,7 +201,7 @@ export function ContentStudioPage() {
             productLine: productLineId,
             language,
             extraNotes: notes,
-            conceptCount: 3,
+            conceptCount: isReel ? 1 : conceptCount,
             platforms,
             subProductId: currentSubProduct?.id,
             objective,
@@ -159,6 +212,7 @@ export function ContentStudioPage() {
             ctaOverride,
             reelStyle: isReel ? reelStyle : undefined,
             voiceover: isReel ? voiceover : undefined,
+            reelDurationS: isReel ? reelDurationS : undefined,
             dryRun,
           },
           setJob,
@@ -166,15 +220,27 @@ export function ContentStudioPage() {
         setJob(result.job);
         setConcepts(result.concepts);
         if (result.job.status === "awaiting_render") {
-          setNotice("Script is ready. Review the scenes, then render video. Video generation is billed separately.");
+          showNotice(
+            "Script is ready. Review the scenes, then render video. Video generation is billed separately.",
+            "success",
+          );
+        } else if (result.job.status === "partially_failed") {
+          showNotice(
+            result.job.error_message
+              ? `Generated with some issues: ${result.job.error_message}`
+              : "Generated with some issues.",
+            "error",
+          );
+        } else if (result.job.status === "succeeded") {
+          showNotice("Generation complete.", "success");
         }
       } else {
         const draft = generateContentDraft({
           brief,
           format,
           platform: channelLabel,
-          voice: kit.voice,
-          audience: kit.audience,
+          voice: brandProfile.voice,
+          audience: brandProfile.audience,
         });
         setJob({
           id: "local",
@@ -209,8 +275,9 @@ export function ContentStudioPage() {
         );
       }
     } catch (error) {
-      setNotice(getApiErrorMessage(error));
+      showNotice(getApiErrorMessage(error), "error");
     } finally {
+      stopProgress(100);
       setGenerating(false);
     }
   };
@@ -218,21 +285,28 @@ export function ContentStudioPage() {
   const renderVideo = async () => {
     if (!job || job.status !== "awaiting_render") return;
     setRendering(true);
-    setNotice("Rendering video clips. This can take a few minutes.");
+    startProgress(ESTIMATED_RENDER_MS);
+    showNotice("Rendering video clips. This can take a few minutes.", "info");
     try {
       const result = await runReelAssetRender({ projectId: currentProject.id, jobId: job.id }, setJob);
       setJob(result.job);
       setConcepts(result.concepts);
-      setNotice(
-        result.job.status === "succeeded"
-          ? "Reel video is ready."
-          : result.job.status === "partially_failed"
-            ? "Render finished with some missing clips."
-            : "Render finished.",
-      );
+      if (result.job.status === "succeeded") {
+        showNotice("Reel video is ready.", "success");
+      } else if (result.job.status === "partially_failed") {
+        showNotice(
+          result.job.error_message
+            ? `Render failed: ${result.job.error_message}`
+            : "Render finished with some missing clips.",
+          "error",
+        );
+      } else {
+        showNotice(result.job.error_message || "Render finished, but no video was produced.", "error");
+      }
     } catch (error) {
-      setNotice(getApiErrorMessage(error));
+      showNotice(getApiErrorMessage(error), "error");
     } finally {
+      stopProgress(100);
       setRendering(false);
     }
   };
@@ -257,7 +331,7 @@ export function ContentStudioPage() {
         id: `post_${Date.now()}_${concept.id}_${platformIndex}`,
       });
     });
-    setNotice(message);
+    showNotice(message, "success");
   };
 
   const runOnConcept = async (
@@ -265,7 +339,7 @@ export function ContentStudioPage() {
     action: "draft" | "review" | "publish",
   ) => {
     setBusyAction(true);
-    setNotice(null);
+    showNotice(null);
     try {
       if (live && concept.id && !concept.id.startsWith("local_")) {
         if (action === "review") await submitConceptForReview(currentProject.id, concept.id);
@@ -281,7 +355,7 @@ export function ContentStudioPage() {
         concept,
       );
     } catch (error) {
-      setNotice(getApiErrorMessage(error));
+      showNotice(getApiErrorMessage(error), "error");
     } finally {
       setBusyAction(false);
     }
@@ -290,9 +364,9 @@ export function ContentStudioPage() {
   const contextChips = [
     currentProject.name,
     currentSubProduct?.name,
-    kit.language || language,
-    kit.voice,
-    kit.audience,
+    brandProfile.language || language,
+    brandProfile.voice,
+    brandProfile.audience,
   ].filter(Boolean);
 
   return (
@@ -314,18 +388,22 @@ export function ContentStudioPage() {
           <Box sx={{ ...STAGE_GLASS, p: 3, borderRadius: "20px" }}>
             <Typography sx={{ fontWeight: 800, mb: 1.25 }}>Content format</Typography>
             <Box sx={{ display: "flex", gap: 0.75, flexWrap: "wrap", mb: 2.5 }}>
-              {QUICK_FORMATS.map((id) => (
-                <Chip
-                  key={id}
-                  label={getContentFormat(id).label}
-                  color={format === id ? "secondary" : "default"}
-                  onClick={() => {
-                    setFormat(id);
-                    const allowed = getContentFormat(id).platforms as readonly string[];
-                    setPlatforms((current) => current.filter((item) => allowed.includes(item)));
-                  }}
-                />
-              ))}
+              {QUICK_FORMATS.map((id) => {
+                const Icon = CONTENT_FORMAT_ICONS[id];
+                return (
+                  <Chip
+                    key={id}
+                    icon={<Icon fontSize="small" />}
+                    label={getContentFormat(id).label}
+                    color={format === id ? "secondary" : "default"}
+                    onClick={() => {
+                      setFormat(id);
+                      const allowed = getContentFormat(id).platforms as readonly string[];
+                      setPlatforms((current) => current.filter((item) => allowed.includes(item)));
+                    }}
+                  />
+                );
+              })}
             </Box>
 
             <TextField
@@ -348,7 +426,7 @@ export function ContentStudioPage() {
                   onChange={(event) => setReelStyle(event.target.value as ReelStyle)}
                   helperText={
                     reelStyle === "avatar"
-                      ? "Uses the reel avatar from Brand Kit Identity. Upload one before generating."
+                      ? "Uses the reel avatar from Brand Profile Identity. Upload one before generating."
                       : "Each concept uses its own cover image as the first frame."
                   }
                 >
@@ -361,9 +439,27 @@ export function ContentStudioPage() {
                   label="Voiceover"
                   value={voiceover}
                   onChange={(event) => setVoiceover(event.target.value as VoiceoverMode)}
+                  helperText={
+                    voiceover === "native_audio"
+                      ? "Requires Gemini Enterprise/Vertex AI access — fails on a standard Gemini Developer API key."
+                      : "Recommended for this environment — works with a standard Gemini API key."
+                  }
                 >
                   <MenuItem value="silent_text">Silent text — cheaper, spoken lines on screen</MenuItem>
                   <MenuItem value="native_audio">Native audio — Veo with real speech</MenuItem>
+                </TextField>
+                <TextField
+                  select
+                  fullWidth
+                  label="Reel duration"
+                  value={reelDurationS}
+                  onChange={(event) => setReelDurationS(Number(event.target.value))}
+                >
+                  {[4, 8, 10, 15, 20, 25, 30].map((seconds) => (
+                    <MenuItem key={seconds} value={seconds}>
+                      {seconds} seconds
+                    </MenuItem>
+                  ))}
                 </TextField>
               </Box>
             ) : null}
@@ -435,6 +531,22 @@ export function ContentStudioPage() {
                   <MenuItem value="hi">Hindi</MenuItem>
                   <MenuItem value="hinglish">Hinglish</MenuItem>
                 </TextField>
+                {isReel ? null : (
+                  <TextField
+                    select
+                    fullWidth
+                    label="Number of concepts"
+                    helperText="How many versions to generate per topic"
+                    value={conceptCount}
+                    onChange={(event) => setConceptCount(Number(event.target.value))}
+                  >
+                    {[1, 2, 3, 4, 5, 6].map((count) => (
+                      <MenuItem key={count} value={count}>
+                        {count}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
                 <TextField fullWidth label="Content objective" placeholder="Drive quote requests from first-time buyers" value={objective} onChange={(event) => setObjective(event.target.value)} />
                 <TextField fullWidth label="Tone" placeholder="Professional, educational" value={toneOverride} onChange={(event) => setToneOverride(event.target.value)} />
                 <TextField fullWidth label="Target audience" placeholder="Young families aged 25–40 in India" value={audienceOverride} onChange={(event) => setAudienceOverride(event.target.value)} />
@@ -490,26 +602,13 @@ export function ContentStudioPage() {
           </Box>
 
           <Box sx={{ display: "grid", gap: 1.5, minWidth: 0 }}>
-            {notice ? (
-              <Alert
-                severity={
-                  generating
-                    ? "info"
-                    : notice.toLowerCase().includes("saved") ||
-                        notice.toLowerCase().includes("published") ||
-                        notice.toLowerCase().includes("approval")
-                      ? "success"
-                      : "error"
-                }
-              >
-                {notice}
-              </Alert>
-            ) : null}
+            {notice ? <Alert severity={noticeSeverity}>{notice}</Alert> : null}
             <CreativePreview
               projectId={currentProject.id}
               job={job}
               concepts={concepts}
               generating={generating || rendering}
+              progress={progress}
               error={null}
               emptyHint={`${meta.label} will appear here after you generate.`}
               onRetry={(hint) => void generate(hint)}
@@ -540,7 +639,7 @@ export function ContentStudioPage() {
                     Send for approval
                   </Button>
                 ) : null}
-                {can(PERMISSIONS.SOCIAL_PUBLISH) || can(PERMISSIONS.CONTENT_PUBLISH) || can(PERMISSIONS.CONTENT_APPROVE) ? (
+                {can(PERMISSIONS.CONTENT_PUBLISH) || can(PERMISSIONS.CONTENT_APPROVE) ? (
                   <Button
                     variant="contained"
                     disabled={busyAction || awaitingRender}

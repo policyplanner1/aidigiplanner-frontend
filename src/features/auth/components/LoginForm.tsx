@@ -3,10 +3,13 @@ import {
   Alert,
   Box,
   Button,
+  IconButton,
+  InputAdornment,
   Link,
   TextField,
   Typography,
 } from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
@@ -36,6 +39,7 @@ export function LoginForm({ expectedRole = "ORGANIZATION" }: LoginFormProps) {
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -151,7 +155,7 @@ export function LoginForm({ expectedRole = "ORGANIZATION" }: LoginFormProps) {
 
       <TextField
         label="Password"
-        type="password"
+        type={showPassword ? "text" : "password"}
         fullWidth
         autoComplete="current-password"
         margin="normal"
@@ -159,6 +163,22 @@ export function LoginForm({ expectedRole = "ORGANIZATION" }: LoginFormProps) {
         error={Boolean(errors.password)}
         helperText={errors.password?.message}
         {...register("password")}
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((value) => !value)}
+                  edge="end"
+                  size="small"
+                >
+                  {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          },
+        }}
       />
 
       <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 0.5 }}>
@@ -199,7 +219,7 @@ export function LoginForm({ expectedRole = "ORGANIZATION" }: LoginFormProps) {
       {expectedRole === "ORGANIZATION" ? (
         <Typography sx={{ mt: 2 }} color="text.secondary">
           New company?{" "}
-          <Link component={RouterLink} to="/signup" underline="none">
+          <Link component={RouterLink} to="/register" underline="none">
             Create an account
           </Link>
         </Typography>

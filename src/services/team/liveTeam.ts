@@ -1,5 +1,5 @@
 import { teamApi } from "./teamApi";
-import type { ApiCompanyMember, ApiCompanyRole } from "../../types/api";
+import type { ApiCompanyMember, ApiCompanyRole, ApiProductMemberRole } from "../../types/api";
 
 export type LiveTeamProjectAccess = {
   projectId: string;
@@ -70,28 +70,44 @@ export async function addLiveTeamMember(
   input: {
     name: string;
     email: string;
-    role: ApiCompanyRole;
+    role: "company_admin" | ApiProductMemberRole;
     projectIds: string[];
   },
 ) {
-  const { data } = await teamApi.addMember(companyId, {
-    email: input.email.trim().toLowerCase(),
-    full_name: input.name.trim(),
-    role: input.role,
-  });
+  const email = input.email.trim().toLowerCase();
+  const full_name = input.name.trim();
 
-  if (input.role === "member" && input.projectIds.length > 0) {
-    await Promise.allSettled(
-      input.projectIds.map((projectId) =>
-        teamApi.addProjectMember(projectId, {
-          user_id: data.user_id,
-          role: "editor",
-        }),
-      ),
-    );
+  if (input.role === "company_admin") {
+    const { data } = await teamApi.addMember(companyId, { email, full_name, role: "company_admin" });
+    return data;
   }
 
-  return data;
+  // Product-scoped roles (product_manager/creator/approver/publisher/analyst)
+  // aren't company members at all — inviting them to a product creates their
+  // CompanyMember(role=member) row automatically (see products/service.py
+  // invite_member), so there's no separate /companies/{id}/members call here.
+  if (input.projectIds.length === 0) {
+    throw new Error("Pick at least one product for this role.");
+  }
+
+  const results = await Promise.allSettled(
+    input.projectIds.map((projectId) =>
+      teamApi.inviteProductMember(projectId, { email, full_name, role: input.role as ApiProductMemberRole }),
+    ),
+  );
+
+  const first = results.find((result) => result.status === "fulfilled") as
+    | PromiseFulfilledResult<Awaited<ReturnType<typeof teamApi.inviteProductMember>>>
+    | undefined;
+  const firstFailure = results.find((result) => result.status === "rejected") as
+    | PromiseRejectedResult
+    | undefined;
+
+  if (!first) {
+    throw firstFailure?.reason ?? new Error("Could not invite this teammate to any product.");
+  }
+
+  return first.value.data;
 }
 
 export async function updateLiveTeamMember(

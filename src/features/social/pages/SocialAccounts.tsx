@@ -2,6 +2,7 @@ import { Alert, Box, Button, Card, CardContent, Chip, Dialog, DialogActions, Dia
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { CapsuleFilter } from "../../../components/ui/CapsuleFilter";
 import { PageHeader } from "../../../components/ui/PageHeader";
 import { NeedProject } from "../../../components/ui/NeedProject";
 import { ScreenFrame } from "../../../components/ui/ScreenFrame";
@@ -15,6 +16,7 @@ import {
   usesManualSocialHandles,
 } from "../../../services/social/socialAccountsService";
 import { followAuthorizationUrl } from "../../../services/social/socialApiMode";
+import { pushNotification } from "../../../store/notificationStore";
 import type { SocialAccount } from "../../../types/organization";
 import type { ConnectProvider } from "../../../types/social";
 import { ConnectProviderDialog } from "../components/ConnectProviderDialog";
@@ -54,7 +56,7 @@ export function SocialAccountsPage() {
   const [params, setParams] = useSearchParams();
   const { organization, currentProject } = useWorkspace();
   const { can } = usePermissions();
-  const canConnect = can(PERMISSIONS.SOCIAL_CONNECT);
+  const canConnect = can(PERMISSIONS.SOCIAL_MANAGE);
   const manual = usesManualSocialHandles();
 
   const [providerOpen, setProviderOpen] = useState(false);
@@ -75,6 +77,8 @@ export function SocialAccountsPage() {
   const disconnect = useDisconnectSocialAccount(currentProject?.id ?? "");
   const addHandle = useAddManualSocialAccount(currentProject?.id ?? "");
 
+  const [platformFilter, setPlatformFilter] = useState<string>("all");
+
   const accounts = accountsQuery.data ?? [];
   const connected = accounts.filter((item) => item.status === "connected");
   const attention = connected.filter(
@@ -85,6 +89,19 @@ export function SocialAccountsPage() {
   const connectedPlatforms = useMemo(
     () => new Set(connected.map((item) => item.platform)),
     [connected],
+  );
+
+  const platformFilterItems = useMemo(
+    () => [
+      { id: "all", label: "All" },
+      ...Array.from(connectedPlatforms).map((platform) => ({ id: platform, label: platformLabel(platform) })),
+    ],
+    [connectedPlatforms],
+  );
+
+  const visibleConnected = useMemo(
+    () => (platformFilter === "all" ? connected : connected.filter((item) => item.platform === platformFilter)),
+    [connected, platformFilter],
   );
 
   const availableProviders = CONNECT_PROVIDERS.filter((provider) =>
@@ -154,6 +171,12 @@ export function SocialAccountsPage() {
       await disconnect.mutateAsync(account.id);
       setManaging(null);
       setBanner("Account removed from this product.");
+      pushNotification({
+        type: "social_account_disconnected",
+        title: "Social account disconnected",
+        detail: `${account.platform} · ${account.handle}`,
+        path: "/app/social-accounts",
+      });
     } catch (error) {
       setBanner(
         error instanceof Error ? error.message : "Could not disconnect this account.",
@@ -223,7 +246,12 @@ export function SocialAccountsPage() {
         ) : null}
 
         <Box>
-          <Typography sx={{ fontWeight: 700, mb: 1.25 }}>Connected accounts</Typography>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1.5, mb: 1.25, flexWrap: "wrap" }}>
+            <Typography sx={{ fontWeight: 700 }}>Connected accounts</Typography>
+            {connectedPlatforms.size > 1 ? (
+              <CapsuleFilter items={platformFilterItems} value={platformFilter} onChange={setPlatformFilter} />
+            ) : null}
+          </Box>
           {connected.length === 0 ? (
             <Card>
               <CardContent>
@@ -234,7 +262,7 @@ export function SocialAccountsPage() {
             </Card>
           ) : (
             <Box sx={{ display: "grid", gap: 1.5 }}>
-              {connected.map((account) => {
+              {visibleConnected.map((account) => {
                 const chip = healthChip(account);
                 return (
                   <Card key={account.id}>

@@ -1,11 +1,11 @@
 export const ROLE_NAMES = [
   "SUPER_ADMIN",
-  "ADMIN",
-  "SOCIAL_MANAGER",
-  "CONTENT_MANAGER",
-  "SALES_MANAGER",
+  "COMPANY_ADMIN",
+  "PRODUCT_MANAGER",
+  "CONTENT_CREATOR",
+  "APPROVER",
+  "PUBLISHER",
   "ANALYST",
-  "USER",
 ] as const;
 
 export type RoleName = (typeof ROLE_NAMES)[number];

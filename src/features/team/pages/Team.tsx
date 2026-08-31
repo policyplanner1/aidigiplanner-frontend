@@ -38,7 +38,7 @@ function accessSummary(
   member: TeamMember,
   projectNames: Map<string, string>,
 ): string {
-  if (member.user.role === "ADMIN") return "All products";
+  if (member.user.role === "COMPANY_ADMIN") return "All products";
 
   const access = member.productAccess ?? [];
   if (access.length === 0) return "No products";
@@ -72,7 +72,7 @@ export function TeamPage() {
     session?.source === "api" || !organization
       ? []
       : listTeamMembers(organization.id);
-  const canManage = can(PERMISSIONS.USERS_MANAGE);
+  const canManage = can(PERMISSIONS.TEAM_MANAGE);
 
   const orgProjects = useMemo(() => {
     if (!organization) return [];
@@ -80,7 +80,7 @@ export function TeamPage() {
     return getAllProjects().filter(
       (project) =>
         project.organizationId === organization.id &&
-        (user?.role === "ADMIN" || visibleIds.has(project.id)),
+        (user?.role === "COMPANY_ADMIN" || visibleIds.has(project.id)),
     );
   }, [organization, projects, user?.role]);
 
@@ -89,7 +89,7 @@ export function TeamPage() {
     [orgProjects],
   );
 
-  if (!can(PERMISSIONS.USERS_VIEW)) {
+  if (!can(PERMISSIONS.TEAM_MANAGE)) {
     return (
       <ScreenFrame>
         <Alert severity="warning">You do not have access to Team.</Alert>
@@ -160,7 +160,7 @@ export function TeamPage() {
         name: editing.user.name,
         email: editing.user.email,
         role:
-          editing.user.role === "SUPER_ADMIN" ? "ADMIN" : editing.user.role,
+          editing.user.role === "SUPER_ADMIN" ? "COMPANY_ADMIN" : editing.user.role,
         status: editing.user.status === "suspended" ? "suspended" : "active",
         productAccess: editing.productAccess ?? [],
       }

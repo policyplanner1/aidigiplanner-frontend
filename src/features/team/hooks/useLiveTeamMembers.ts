@@ -6,7 +6,7 @@ import {
   removeLiveTeamMember,
   updateLiveTeamMember,
 } from "../../../services/team/liveTeam";
-import type { ApiCompanyRole } from "../../../types/api";
+import type { ApiCompanyRole, ApiProductMemberRole } from "../../../types/api";
 
 export function teamMembersKey(companyId: string) {
   return ["company-members", companyId] as const;
@@ -30,7 +30,7 @@ export function useAddLiveTeamMember(companyId: string) {
     mutationFn: (input: {
       name: string;
       email: string;
-      role: ApiCompanyRole;
+      role: "company_admin" | ApiProductMemberRole;
       projectIds: string[];
     }) => addLiveTeamMember(companyId, input),
     onSuccess: () => {

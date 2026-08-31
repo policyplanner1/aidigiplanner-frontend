@@ -49,7 +49,7 @@ export function moduleFromPath(pathname: string): CursorModule {
   if (pathname.includes("/social/inbox")) return "rcs";
   if (pathname.includes("/social/campaigns") || pathname.includes("/campaigns")) return "campaigns";
   if (pathname.includes("/social/analytics") || pathname.includes("/cross-network")) return "analytics";
-  if (pathname.includes("/social") || pathname.includes("/brand-kit") || pathname.includes("/content")) {
+  if (pathname.includes("/social") || pathname.includes("/brand-profile") || pathname.includes("/content")) {
     return "social";
   }
   if (pathname.includes("/crm") || pathname.includes("/integrations")) return "automation";

@@ -34,15 +34,21 @@ export const changePasswordSchema = z
     path: ["password"],
   });
 
-export const signupSchema = z.object({
-  name: z.string().min(2, "Full name is required"),
-  email: z.string().email("Enter a valid work email"),
-  companyName: z.string().min(2, "Company name is required"),
-  password: z.string().min(10, "Password must be at least 10 characters"),
-  terms: z.boolean().refine((value) => value, {
-    message: "Agree to the Terms and Privacy Policy to continue.",
-  }),
-});
+export const signupSchema = z
+  .object({
+    name: z.string().min(2, "Full name is required"),
+    email: z.string().email("Enter a valid work email"),
+    companyName: z.string().min(2, "Company or group name is required"),
+    password: z.string().min(10, "Password must be at least 10 characters"),
+    confirmPassword: z.string(),
+    terms: z.boolean().refine((value) => value, {
+      message: "Agree to the Terms and Privacy Policy to continue.",
+    }),
+  })
+  .refine((value) => value.password === value.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 export type LoginFormValues = z.infer<typeof loginSchema>;
 export type SignupFormValues = z.infer<typeof signupSchema>;

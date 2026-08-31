@@ -1,12 +1,14 @@
 import { useCallback, useSyncExternalStore } from "react";
 
-import { isLiveAuth } from "../services/api/errors";
-import {
-  getBrandsForSession,
-  loginWithPassword,
-  seedDemoData,
-  signupOrganization,
-} from "../services/auth/mockAuth";
+// The app now always talks to the real aidigiplanner-backend API — the mock/demo-data
+// auth path (mockAuth.ts) is disabled below and kept only for reference.
+// import { isLiveAuth } from "../services/api/errors";
+// import {
+//   getBrandsForSession,
+//   loginWithPassword,
+//   seedDemoData,
+//   signupOrganization,
+// } from "../services/auth/mockAuth";
 import {
   loginWithApi,
   refreshLiveSession,
@@ -17,11 +19,11 @@ import { authApi } from "../services/auth/authApi";
 import { postAuthPath } from "../services/auth/mapSession";
 import { useAuthStore } from "../store/authStore";
 import { useOrganizationStore } from "../store/organizationStore";
-import type { AuthSession } from "../types/auth";
+// import type { AuthSession } from "../types/auth";
 
-if (typeof window !== "undefined") {
-  seedDemoData();
-}
+// if (typeof window !== "undefined") {
+//   seedDemoData();
+// }
 
 export function useAuthHydrated() {
   return useSyncExternalStore(
@@ -34,7 +36,7 @@ export function useAuthHydrated() {
 export function useAuth() {
   const session = useAuthStore((state) => state.session);
   const setAuth = useAuthStore((state) => state.setAuth);
-  const setSession = useAuthStore((state) => state.setSession);
+  // const setSession = useAuthStore((state) => state.setSession);
   const clearSession = useAuthStore((state) => state.logout);
   const refreshToken = useAuthStore((state) => state.refreshToken);
   const setCurrentBrandId = useOrganizationStore((state) => state.setCurrentBrandId);
@@ -66,38 +68,38 @@ export function useAuth() {
     [resetWorkspace, setAuth, setCurrentBrandId, setLiveProjects],
   );
 
-  const applyMockSession = useCallback(
-    (nextSession: AuthSession) => {
-      setSession(nextSession);
-
-      if (nextSession.user.role === "SUPER_ADMIN") {
-        resetWorkspace();
-        return;
-      }
-
-      const brands = getBrandsForSession(nextSession);
-      const currentBrandId = useOrganizationStore.getState().currentBrandId;
-      const nextBrandId = brands.some((brand) => brand.id === currentBrandId)
-        ? currentBrandId
-        : (brands[0]?.id ?? null);
-
-      setCurrentBrandId(nextBrandId);
-    },
-    [resetWorkspace, setCurrentBrandId, setSession],
-  );
+  // const applyMockSession = useCallback(
+  //   (nextSession: AuthSession) => {
+  //     setSession(nextSession);
+  //
+  //     if (nextSession.user.role === "SUPER_ADMIN") {
+  //       resetWorkspace();
+  //       return;
+  //     }
+  //
+  //     const brands = getBrandsForSession(nextSession);
+  //     const currentBrandId = useOrganizationStore.getState().currentBrandId;
+  //     const nextBrandId = brands.some((brand) => brand.id === currentBrandId)
+  //       ? currentBrandId
+  //       : (brands[0]?.id ?? null);
+  //
+  //     setCurrentBrandId(nextBrandId);
+  //   },
+  //   [resetWorkspace, setCurrentBrandId, setSession],
+  // );
 
   const login = useCallback(
     async (email: string, password: string) => {
-      if (isLiveAuth()) {
-        const result = await loginWithApi(email, password);
-        return applyLive(result);
-      }
-
-      const nextSession = loginWithPassword(email, password);
-      applyMockSession(nextSession);
-      return nextSession;
+      // if (isLiveAuth()) {
+      const result = await loginWithApi(email, password);
+      return applyLive(result);
+      // }
+      //
+      // const nextSession = loginWithPassword(email, password);
+      // applyMockSession(nextSession);
+      // return nextSession;
     },
-    [applyLive, applyMockSession],
+    [applyLive],
   );
 
   const signup = useCallback(
@@ -107,25 +109,26 @@ export function useAuth() {
       email: string;
       password: string;
     }) => {
-      if (isLiveAuth()) {
-        return registerCompanyWithApi(input);
-      }
-
-      const nextSession = signupOrganization(input);
-      applyMockSession(nextSession);
-      return nextSession;
+      // if (isLiveAuth()) {
+      return registerCompanyWithApi(input);
+      // }
+      //
+      // const nextSession = signupOrganization(input);
+      // applyMockSession(nextSession);
+      // return nextSession;
     },
-    [applyMockSession],
+    [],
   );
 
   const refreshWorkspace = useCallback(async () => {
-    if (!isLiveAuth()) return session;
+    // if (!isLiveAuth()) return session;
     const result = await refreshLiveSession();
     return applyLive(result);
-  }, [applyLive, session]);
+  }, [applyLive]);
 
   const logout = useCallback(() => {
-    if (isLiveAuth() && refreshToken) {
+    // if (isLiveAuth() && refreshToken) {
+    if (refreshToken) {
       void authApi.logout(refreshToken).catch(() => undefined);
     }
     clearSession();

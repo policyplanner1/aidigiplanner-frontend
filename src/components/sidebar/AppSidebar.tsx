@@ -10,6 +10,8 @@ import {
   DeviceHub,
   ExpandLess,
   ExpandMore,
+  Assessment,
+  Description,
   FolderOpen,
   Group,
   Hub,
@@ -84,12 +86,16 @@ const icons: Record<NavIconName, ReactElement> = {
   leads: <Search fontSize="small" />,
   crm: <ContactPage fontSize="small" />,
   team: <Group fontSize="small" />,
-  brandKit: <Palette fontSize="small" />,
+  brandProfile: <Palette fontSize="small" />,
   crossNetwork: <DeviceHub fontSize="small" />,
+  templates: <Description fontSize="small" />,
+  reports: <Assessment fontSize="small" />,
 };
 
 function itemVisible(item: NavItem, permissions: string[]) {
-  return !item.permission || hasPermission(permissions, item.permission);
+  if (!item.permission) return true;
+  const required = Array.isArray(item.permission) ? item.permission : [item.permission];
+  return required.some((permission) => hasPermission(permissions, permission));
 }
 
 function getVisibleNav(entries: NavEntry[], permissions: string[]): NavEntry[] {
@@ -249,7 +255,7 @@ type AppSidebarProps = {
 
 export function AppSidebar({
   items,
-  title = "AI Digi Planner",
+  title = "AI Social Planner",
   subtitle,
 }: AppSidebarProps) {
   const navigate = useNavigate();

@@ -16,14 +16,22 @@ import { useEffect } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
-import type { ApiCompanyRole } from "../../../types/api";
 import type { Project } from "../../../types/organization";
 import type { LiveTeamMember } from "../../../services/team/liveTeam";
+
+const ROLE_OPTIONS = [
+  { value: "company_admin", label: "Company Admin" },
+  { value: "product_manager", label: "Product Manager" },
+  { value: "creator", label: "Content Creator" },
+  { value: "approver", label: "Approver" },
+  { value: "publisher", label: "Publisher" },
+  { value: "analyst", label: "Analyst" },
+] as const;
 
 const schema = z.object({
   name: z.string().min(2, "Name is required"),
   email: z.string().email("Enter a valid email"),
-  role: z.enum(["company_admin", "member"]),
+  role: z.enum(["company_admin", "product_manager", "creator", "approver", "publisher", "analyst"]),
   status: z.enum(["active", "suspended"]),
   projectIds: z.array(z.string()),
 });
@@ -62,7 +70,7 @@ export function LiveMemberDialog({
     defaultValues: {
       name: "",
       email: "",
-      role: "member",
+      role: "creator",
       status: "active",
       projectIds: [],
     },
@@ -78,14 +86,16 @@ export function LiveMemberDialog({
         ? {
             name: initial.name,
             email: initial.email,
-            role: initial.role,
+            // Editing only changes company-level role (company_admin/member) today —
+            // product-level role changes happen from the product's own team panel.
+            role: initial.role === "company_admin" ? "company_admin" : "creator",
             status: initial.status,
             projectIds: initial.projects.map((item) => item.projectId),
           }
         : {
             name: "",
             email: "",
-            role: "member",
+            role: "creator",
             status: "active",
             projectIds: [],
           },
@@ -100,6 +110,7 @@ export function LiveMemberDialog({
   };
 
   const submitting = isSubmitting || busy;
+  const isProductRole = role !== "company_admin";
 
   return (
     <Dialog open={open} onClose={submitting ? undefined : onClose} fullWidth maxWidth="sm">
@@ -112,8 +123,8 @@ export function LiveMemberDialog({
         <DialogContent>
           <Typography color="text.secondary" sx={{ mb: 1.5 }}>
             {editing
-              ? "Update their company role or suspend access."
-              : "They join this company. Members can also be assigned to products."}
+              ? "Update their role or suspend access."
+              : "Company Admins can manage everything. Every other role is scoped to the products you pick below."}
           </Typography>
           <TextField
             label="Full name"
@@ -144,13 +155,16 @@ export function LiveMemberDialog({
                 label="Role"
                 fullWidth
                 margin="normal"
+                disabled={editing}
+                helperText={editing ? "Role changes for a specific product happen from that product's team panel." : undefined}
                 value={field.value}
                 onChange={field.onChange}
               >
-                <MenuItem value={"company_admin" satisfies ApiCompanyRole}>
-                  Organization Admin
-                </MenuItem>
-                <MenuItem value={"member" satisfies ApiCompanyRole}>Member</MenuItem>
+                {ROLE_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
               </TextField>
             )}
           />
@@ -174,12 +188,12 @@ export function LiveMemberDialog({
             />
           ) : null}
 
-          {!editing && role === "member" ? (
+          {!editing && isProductRole ? (
             <Box sx={{ mt: 2 }}>
               <Typography sx={{ fontWeight: 600, mb: 1 }}>Product access</Typography>
               {projects.length === 0 ? (
                 <Typography color="text.secondary">
-                  No products yet. You can still add them to the company.
+                  Create a product first — this role needs at least one to be assigned to.
                 </Typography>
               ) : (
                 projects.map((project) => (
@@ -201,7 +215,7 @@ export function LiveMemberDialog({
 
           {role === "company_admin" ? (
             <Typography color="text.secondary" sx={{ mt: 1.5 }}>
-              Organization admins can manage the company and every product.
+              Company admins can manage the company and every product.
             </Typography>
           ) : null}
         </DialogContent>
@@ -209,7 +223,11 @@ export function LiveMemberDialog({
           <Button onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={submitting}>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={submitting || (!editing && isProductRole && projectIds.length === 0)}
+          >
             {submitting ? "Saving..." : editing ? "Save" : "Add teammate"}
           </Button>
         </DialogActions>

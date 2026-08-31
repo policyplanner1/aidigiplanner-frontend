@@ -1,5 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Alert, Box, Button, Checkbox, FormControlLabel, FormHelperText, Link, TextField, Typography } from "@mui/material";
+import {
+  Alert,
+  Box,
+  Button,
+  Checkbox,
+  FormControlLabel,
+  FormHelperText,
+  IconButton,
+  InputAdornment,
+  Link,
+  TextField,
+  Typography,
+} from "@mui/material";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
@@ -9,11 +22,14 @@ import { TYPE } from "../../../constants/fonts";
 import { isLiveAuth } from "../../../services/api/errors";
 import { saveSignupCache } from "../../onboarding/signupCache";
 import { signupSchema, type SignupFormValues } from "../schemas/authSchemas";
+import { PasswordStrengthMeter } from "./PasswordStrengthMeter";
 
 export function SignupForm() {
   const navigate = useNavigate();
   const { signup } = useAuth();
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -28,6 +44,7 @@ export function SignupForm() {
       email: "",
       companyName: "",
       password: "",
+      confirmPassword: "",
       terms: false,
     },
   });
@@ -69,7 +86,7 @@ export function SignupForm() {
       </Typography>
       <Typography sx={{ ...TYPE.body, color: "text.secondary", mt: 0.75, mb: 3 }}>
         {isLiveAuth()
-          ? "We’ll email a 6-digit code. The company name is saved here and won’t be asked again."
+          ? "Set up your workspace and start creating social media content with AI."
           : "Creates a demo company you can explore right away."}
       </Typography>
 
@@ -99,7 +116,7 @@ export function SignupForm() {
         {...register("email")}
       />
       <TextField
-        label="Company name"
+        label="Company or group name"
         fullWidth
         margin="normal"
         placeholder="Example Insurance"
@@ -109,7 +126,7 @@ export function SignupForm() {
       />
       <TextField
         label="Password"
-        type="password"
+        type={showPassword ? "text" : "password"}
         fullWidth
         margin="normal"
         autoComplete="new-password"
@@ -117,6 +134,50 @@ export function SignupForm() {
         error={Boolean(errors.password)}
         helperText={errors.password?.message}
         {...register("password")}
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((value) => !value)}
+                  edge="end"
+                  size="small"
+                >
+                  {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+      <PasswordStrengthMeter password={watch("password")} />
+      <TextField
+        label="Confirm password"
+        type={showConfirmPassword ? "text" : "password"}
+        fullWidth
+        margin="normal"
+        autoComplete="new-password"
+        placeholder="Re-enter your password"
+        error={Boolean(errors.confirmPassword)}
+        helperText={errors.confirmPassword?.message}
+        {...register("confirmPassword")}
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowConfirmPassword((value) => !value)}
+                  edge="end"
+                  size="small"
+                >
+                  {showConfirmPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          },
+        }}
       />
 
       <FormControlLabel
@@ -129,7 +190,14 @@ export function SignupForm() {
         }
         label={
           <Typography sx={{ ...TYPE.body, pt: 1 }}>
-            I agree to the Terms and Privacy Policy
+            I agree to the{" "}
+            <Link component={RouterLink} to="/terms" target="_blank" rel="noopener">
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link component={RouterLink} to="/privacy-policy" target="_blank" rel="noopener">
+              Privacy Policy
+            </Link>
           </Typography>
         }
       />

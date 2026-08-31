@@ -155,7 +155,7 @@ export function UsersPage() {
       <PageHeader
         eyebrow="Platform"
         title="Organization"
-        description="Live counts for every company on AI Digi Planner."
+        description="Live counts for every company on AI Social Planner."
         stats={
           live
             ? summary.map((item) => ({

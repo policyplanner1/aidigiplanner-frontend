@@ -1,11 +1,25 @@
-import { Box, Paper, Typography } from "@mui/material";
-import { Outlet } from "react-router-dom";
+import { ArrowBack } from "@mui/icons-material";
+import { Box, Button, Paper, Typography } from "@mui/material";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { TYPE } from "../constants/fonts";
 import { CANVAS_BG, GLASS_SX, SURFACE } from "../constants/layout";
 import { AuthBrandMark } from "../features/auth/components/AuthBrandMark";
+import { ONBOARDING_STEPS, onboardingStepIndex } from "../features/onboarding/steps";
+import { StepProgress } from "../components/ui/StepProgress";
 
 export function OnboardingLayout() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentSegment = location.pathname.split("/")[2];
+  const currentIndex = onboardingStepIndex(currentSegment);
+  const isCompleted = currentSegment === "completed";
+
+  const goBack = () => {
+    if (currentIndex <= 0) return;
+    navigate(`/onboarding/${ONBOARDING_STEPS[currentIndex - 1]}`);
+  };
+
   return (
     <Box
       sx={{
@@ -37,6 +51,17 @@ export function OnboardingLayout() {
             },
           }}
         >
+          {!isCompleted ? <StepProgress steps={[...ONBOARDING_STEPS]} currentIndex={currentIndex} /> : null}
+          {!isCompleted && currentIndex > 0 ? (
+            <Button
+              size="small"
+              startIcon={<ArrowBack fontSize="small" />}
+              onClick={goBack}
+              sx={{ mb: 1.5, color: "text.secondary" }}
+            >
+              Back
+            </Button>
+          ) : null}
           <Outlet />
         </Paper>
         <Typography sx={{ ...TYPE.label, color: "text.secondary", textAlign: "center", mt: 2, fontSize: 12 }}>

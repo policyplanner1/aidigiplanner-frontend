@@ -1,4 +1,4 @@
-import { Box, Button, Chip, CircularProgress, TextField, Typography } from "@mui/material";
+import { Box, Button, Chip, CircularProgress, LinearProgress, TextField, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 
 import { TYPE } from "../../../constants/fonts";
@@ -20,6 +20,7 @@ type CreativePreviewProps = {
   job: GenerationJob | null;
   concepts: CreativeConcept[];
   generating: boolean;
+  progress?: number;
   error: string | null;
   emptyHint: string;
   onRetry?: (hint: string) => void;
@@ -31,6 +32,7 @@ export function CreativePreview({
   job,
   concepts,
   generating,
+  progress = 0,
   error,
   emptyHint,
   onRetry,
@@ -128,11 +130,18 @@ export function CreativePreview({
       </Box>
 
       {generating ? (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.25, py: 1 }}>
-          <CircularProgress size={18} />
-          <Typography sx={{ fontWeight: 700 }}>
-            {job ? jobStatusLabel(job.status) : "Starting generation…"}
-          </Typography>
+        <Box sx={{ display: "grid", gap: 0.5, py: 0.5 }}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+            <Typography sx={{ fontWeight: 700 }}>
+              {job ? jobStatusLabel(job.status) : "Starting generation…"}
+            </Typography>
+            <Typography sx={{ fontWeight: 800, fontSize: 13, color: "secondary.dark" }}>{progress}%</Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progress}
+            sx={{ height: 8, borderRadius: 999, backgroundColor: "rgba(31,138,128,0.15)" }}
+          />
         </Box>
       ) : null}
 
@@ -255,6 +264,11 @@ export function CreativePreview({
             </>
           )}
           <Typography variant="body2">CTA: {selected.cta}</Typography>
+          {selected.suggested_posting_time ? (
+            <Typography variant="caption" color="text.secondary">
+              Suggested posting time: {new Date(selected.suggested_posting_time).toLocaleString()}
+            </Typography>
+          ) : null}
           {formatReelScript(selected.reel_script) ? (
             <Box sx={{ p: 1.5, borderRadius: "14px", backgroundColor: "rgba(246,238,230,0.55)", border: `1px solid ${SURFACE.border}` }}>
               <Typography sx={{ ...TYPE.eyebrow, color: "text.secondary", mb: 0.75 }}>Reel script</Typography>

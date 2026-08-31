@@ -186,7 +186,7 @@ export function getProjectsForSession(session: AuthSession): Project[] {
     (project) => project.organizationId === session.organizationId,
   );
 
-  if (session.user.role === "ADMIN") {
+  if (session.user.role === "COMPANY_ADMIN") {
     return projects;
   }
 

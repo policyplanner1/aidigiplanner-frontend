@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 const orgRoles = [
-  "ADMIN",
-  "SOCIAL_MANAGER",
-  "CONTENT_MANAGER",
-  "SALES_MANAGER",
+  "COMPANY_ADMIN",
+  "PRODUCT_MANAGER",
+  "CONTENT_CREATOR",
+  "APPROVER",
+  "PUBLISHER",
   "ANALYST",
-  "USER",
 ] as const;
 
 export const productAccessSchema = z.object({
@@ -27,7 +27,7 @@ export const teamMemberSchema = z
     productAccess: z.array(productAccessSchema),
   })
   .superRefine((value, ctx) => {
-    if (value.role !== "ADMIN" && value.productAccess.length === 0) {
+    if (value.role !== "COMPANY_ADMIN" && value.productAccess.length === 0) {
       ctx.addIssue({
         code: "custom",
         path: ["productAccess"],

@@ -9,7 +9,7 @@ import { useWorkspace } from "../../../hooks/useWorkspace";
 const agents = [
   {
     title: "Content Agent",
-    body: "Turns the brand kit into weekly captions and campaign drafts.",
+    body: "Turns the brand profile into weekly captions and campaign drafts.",
     icon: <AutoAwesome />,
     status: "Active",
   },

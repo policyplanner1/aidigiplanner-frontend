@@ -1,4 +1,4 @@
-import { Box, Chip, Typography } from "@mui/material";
+import { Alert, Box, Chip, Typography } from "@mui/material";
 import {
   CartesianGrid,
   Line,
@@ -38,6 +38,10 @@ export function SocialAnalyticsPage() {
           title="Analytics"
           description={`What is landing for ${currentProject.name} across posts, video, and articles.`}
         />
+        <Alert severity="info">
+          Sample data — aidigiplanner-backend doesn't have a real analytics/insights
+          module yet, so these numbers are illustrative, not live performance data.
+        </Alert>
         <Box
           sx={{
             display: "grid",
