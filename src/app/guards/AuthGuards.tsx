@@ -9,7 +9,7 @@ import { useWorkspace } from "../../hooks/useWorkspace";
 import { isLiveAuth } from "../../services/api/errors";
 import { postAuthPath, roleHomePath } from "../../services/auth/mapSession";
 import { onboardingApi } from "../../services/onboarding/onboardingApi";
-import { onboardingStepIndex, resumeStepForStatus } from "../../features/onboarding/steps";
+import { maxReachableStepIndex, onboardingStepIndex, resumeStepForStatus } from "../../features/onboarding/steps";
 import type { RoleName } from "../../types/auth";
 
 function LoadingScreen() {
@@ -187,9 +187,9 @@ export function OnboardingGuard() {
 
   const currentSegment = location.pathname.split("/")[2];
   const currentIndex = onboardingStepIndex(currentSegment);
-  const resumeIndex = onboardingStepIndex(resumeStep);
+  const maxIndex = maxReachableStepIndex(onboarding.data?.onboarding_step);
 
-  if (!currentSegment || currentIndex > resumeIndex) {
+  if (!currentSegment || currentIndex > maxIndex) {
     return <Navigate to={`/onboarding/${resumeStep}`} replace />;
   }
 

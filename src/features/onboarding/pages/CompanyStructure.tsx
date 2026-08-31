@@ -1,6 +1,7 @@
 import { Alert, Box, Button } from "@mui/material";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "../../../hooks/useAuth";
 import { getApiErrorMessage } from "../../../services/api/errors";
@@ -10,6 +11,7 @@ import { CardChoice, StepHeading } from "../onboardingShared";
 
 export function CompanyStructurePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { session } = useAuth();
   const companyId = session?.organizationId ?? "";
   const [structure, setStructure] = useState<BrandStructure>("multi_brand");
@@ -20,7 +22,13 @@ export function CompanyStructurePage() {
     setBusy(true);
     setError(null);
     try {
-      if (companyId) await onboardingApi.setBrandStructure(companyId, structure);
+      if (companyId) {
+        await onboardingApi.setBrandStructure(companyId, structure);
+        // The onboarding guard reads this same cache to decide which steps are
+        // unlocked -- without invalidating it here it still shows the
+        // pre-update checkpoint and bounces this navigation right back.
+        await queryClient.invalidateQueries({ queryKey: ["onboarding", companyId] });
+      }
       navigate("/onboarding/company-profile");
     } catch (err) {
       setError(getApiErrorMessage(err));

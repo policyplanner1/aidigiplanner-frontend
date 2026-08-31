@@ -1,6 +1,7 @@
 import { Alert, Box, Button, Chip, Collapse, TextField, Typography } from "@mui/material";
 import { useState } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { TYPE } from "../../../constants/fonts";
 import { useAuth } from "../../../hooks/useAuth";
@@ -18,6 +19,7 @@ type ReviewState = {
 
 export function BrandReviewPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const location = useLocation();
   const state = location.state as ReviewState | null;
   const { session } = useAuth();
@@ -51,6 +53,11 @@ export function BrandReviewPage() {
             market: profile.market || "India",
             audience_primary: profile.audience_primary || "Professionals",
           });
+          // Saving the company brand profile advances the onboarding
+          // checkpoint server-side; the guard reads this same cached query to
+          // decide reachable steps, so it must be refreshed before jumping
+          // ahead to /products or it bounces this navigation straight back.
+          await queryClient.invalidateQueries({ queryKey: ["onboarding", companyId] });
         }
         navigate("/onboarding/products");
         return;

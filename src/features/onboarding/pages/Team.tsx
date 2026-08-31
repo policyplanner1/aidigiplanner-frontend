@@ -24,6 +24,7 @@ export function OnboardingTeamPage() {
   const companyId = session?.organizationId ?? "";
   const { product, isLoading } = useLatestOnboardingProduct(companyId);
 
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<ProductInviteRole>("creator");
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -32,6 +33,10 @@ export function OnboardingTeamPage() {
   const [error, setError] = useState<string | null>(null);
 
   const sendInvite = async () => {
+    if (!fullName.trim()) {
+      setError("Enter their full name to invite.");
+      return;
+    }
     if (!email.trim()) {
       setError("Enter an email to invite.");
       return;
@@ -42,10 +47,12 @@ export function OnboardingTeamPage() {
     try {
       await onboardingApi.inviteToProduct(product.id, {
         email: email.trim(),
+        full_name: fullName.trim(),
         role,
         sub_product_ids: [],
       });
       setInvited((count) => count + 1);
+      setFullName("");
       setEmail("");
     } catch (err) {
       setError(getApiErrorMessage(err));
@@ -75,6 +82,7 @@ export function OnboardingTeamPage() {
       ) : null}
 
       <Box sx={{ display: "grid", gap: 2 }}>
+        <TextField label="Full name" fullWidth placeholder="Alex Johnson" value={fullName} onChange={(event) => setFullName(event.target.value)} />
         <TextField label="Email address" fullWidth placeholder="alex@example.com" value={email} onChange={(event) => setEmail(event.target.value)} />
         <TextField select fullWidth label="Role" value={role} onChange={(event) => setRole(event.target.value as ProductInviteRole)}>
           {ROLES.map((item) => (

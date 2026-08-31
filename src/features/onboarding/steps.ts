@@ -42,3 +42,34 @@ export function resumeStepForStatus(step: OnboardingStep | string | undefined): 
       return "company-structure";
   }
 }
+
+// The step index that unlocks at each checkpoint, in ascending order. A user
+// who has hit a given checkpoint may freely navigate any UI step up to (but
+// not including) the step that unlocks at the *next* checkpoint -- e.g. once
+// brand_structure_selected lands them on company-profile (index 1), they can
+// still walk forward through brand-analysis and brand-review (indexes 2-3)
+// on their way to the brand_profile_completed checkpoint that unlocks
+// products (index 4).
+const CHECKPOINT_STEP_INDEXES = [
+  onboardingStepIndex(resumeStepForStatus("registered")),
+  onboardingStepIndex(resumeStepForStatus("brand_structure_selected")),
+  onboardingStepIndex(resumeStepForStatus("brand_profile_completed")),
+  onboardingStepIndex(resumeStepForStatus("first_product_created")),
+  onboardingStepIndex(resumeStepForStatus("completed")),
+];
+
+export function maxReachableStepIndex(step: OnboardingStep | string | undefined): number {
+  const resumeIndex = onboardingStepIndex(resumeStepForStatus(step));
+  const position = CHECKPOINT_STEP_INDEXES.indexOf(resumeIndex);
+  if (position === -1 || position === CHECKPOINT_STEP_INDEXES.length - 1) {
+    return resumeIndex;
+  }
+  const nextIndex = CHECKPOINT_STEP_INDEXES[position + 1];
+  const lastStepIndex = ONBOARDING_STEPS.length - 1;
+  // "completed" (the final UI step) is the review screen a user lands on
+  // *before* the completed checkpoint is recorded -- its own buttons are what
+  // call the complete-onboarding endpoint -- so it must stay reachable once
+  // the last real checkpoint (first_product_created) is hit, unlike every
+  // other boundary where the next step is gated behind a real action.
+  return nextIndex === lastStepIndex ? nextIndex : nextIndex - 1;
+}

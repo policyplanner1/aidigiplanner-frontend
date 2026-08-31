@@ -43,7 +43,10 @@ export function CompanyProfilePage() {
     setBusy(true);
     setError(null);
     try {
-      if (companyId) await onboardingApi.setSingleBrandDetails(companyId, industry);
+      if (companyId) {
+        await onboardingApi.setSingleBrandDetails(companyId, industry);
+        await onboarding.refetch();
+      }
       navigate("/onboarding/brand-analysis", {
         state: {
           target: "company",
@@ -66,6 +69,11 @@ export function CompanyProfilePage() {
       if (companyId) {
         await onboardingApi.setGroupProfile(companyId, groupWebsite.trim() || undefined);
         if (logoFile) await onboardingApi.uploadGroupLogo(companyId, logoFile);
+        // setGroupProfile advances the onboarding checkpoint server-side; the
+        // guard reads this same cached query to decide reachable steps, so it
+        // must be refreshed before jumping ahead to /products or it bounces
+        // this navigation straight back to company-profile.
+        await onboarding.refetch();
       }
       navigate("/onboarding/products");
     } catch (err) {

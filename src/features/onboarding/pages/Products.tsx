@@ -1,6 +1,7 @@
 import { Alert, Box, Button, MenuItem, TextField, Typography } from "@mui/material";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { TYPE } from "../../../constants/fonts";
 import { useAuth } from "../../../hooks/useAuth";
@@ -23,6 +24,7 @@ function registrableDomain(url: string): string | null {
 
 export function OnboardingProductsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { session } = useAuth();
   const companyId = session?.organizationId ?? "";
 
@@ -97,6 +99,11 @@ export function OnboardingProductsPage() {
         description: website.trim() || description.trim() || null,
         branding_mode: brandingMode,
       });
+      // Creating the first product advances the onboarding checkpoint
+      // server-side; the guard reads this same cached query to decide
+      // reachable steps, so it must be refreshed before jumping ahead or it
+      // bounces this navigation straight back.
+      await queryClient.invalidateQueries({ queryKey: ["onboarding", companyId] });
 
       if (brandingMode === "separate_brand") {
         navigate("/onboarding/brand-analysis", {
